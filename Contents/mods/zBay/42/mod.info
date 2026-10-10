@@ -1,0 +1,7 @@
+name=zBay
+id=zBay
+author=Estral
+description=A server marketplace with a bank, auctions and a Discord bridge - by Estral
+poster=poster.png
+require=NeatUI_Framework
+versionMin=42.20
