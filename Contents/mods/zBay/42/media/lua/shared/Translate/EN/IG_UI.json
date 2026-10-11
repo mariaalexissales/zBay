@@ -138,6 +138,7 @@
   "IGUI_zBay_Res_ReloadedNotes": "Settings reloaded with %1 warning(s). See the server log.",
   "IGUI_zBay_Res_ReloadFailed": "config.json could not be read. The old settings are still in force.",
   "IGUI_zBay_Res_BackedUp": "Backup written.",
+  "IGUI_zBay_Res_TestMail": "Test mail sent: %1 item(s).",
   "IGUI_zBay_Res_BackupFailed": "The backup could not be written.",
   "IGUI_zBay_Res_Restored": "Market restored from the backup.",
   "IGUI_zBay_Res_RestoreFailed": "There is no usable backup to restore.",

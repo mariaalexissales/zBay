@@ -242,6 +242,15 @@ function zBay_Commands.handlers.adminRestore(player, args)
     zBay_reply(player, ok, ok and "Restored" or "RestoreFailed")
 end
 
+-- the client only draws this one in debug mode, which the server cannot see. it does not
+-- need to: an admin can spawn anything this puts in the mail.
+function zBay_Commands.handlers.adminTestMail(player, args)
+    if not zBay_adminOnly(player, "send test mail") then return end
+
+    local queued = zBay_Mailbox.sendTest(zBay.nameOf(player))
+    zBay_reply(player, queued > 0, queued > 0 and "TestMail" or "Failed", queued)
+end
+
 -- ----------------------------------------------------------------------------
 -- the wire and the clock
 -- ----------------------------------------------------------------------------

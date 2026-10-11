@@ -70,6 +70,10 @@ local function zBay_atBox(playerNum, x, y, z, command, args)
     ISTimedActionQueue.add(walk)
 end
 
+function zBay_Menu.onTestMail(playerNum)
+    S.send("adminTestMail", {})
+end
+
 function zBay_Menu.onSetMailbox(playerNum, x, y, z)
     zBay_atBox(playerNum, x, y, z, "mailSet", { x = x, y = y, z = z })
 end
@@ -87,6 +91,12 @@ local function zBay_onPreFill(playerNum, context, worldobjects, test)
     if test then return ISWorldObjectContextMenu.setTest() end
 
     context:addOption(getText("IGUI_zBay_Open"), playerNum, zBay_Menu.onOpen)
+
+    -- debug mode only: mail to try the mailbox with, with nobody else on to buy from. not a
+    -- translated string, as no player is meant to see it. the server asks about admin again.
+    if getDebug() and S.admin then
+        context:addOption("zBay: Send Test Mail", playerNum, zBay_Menu.onTestMail)
+    end
 
     -- the hello on the way in can be lost: on a multiplayer client OnCreatePlayer may fire
     -- before there is a player to send it as. without the settings a mailbox is just a tile,

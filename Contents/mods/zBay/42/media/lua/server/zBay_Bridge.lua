@@ -8,6 +8,7 @@ require "zBay_Files"
 require "zBay_Config"
 require "zBay_State"
 require "zBay_Bank"
+require "zBay_Mailbox"
 
 if not zBay.isAuthority() then return end
 
@@ -220,6 +221,34 @@ function inbound.balance_query(command)
         user = username,
         balance = username and zBay_Bank.balance(username) or nil,
     })
+end
+
+-- how many lines of mail one answer carries. the counts beside them are the real ones.
+local MAIL_LINES = 25
+
+-- discord: "/zbay mailbox". what is waiting, by name and number. nothing is handed over
+-- from there: collecting is still done in game.
+function inbound.mailbox_query(command)
+    local username = zBay_State.discordOf[command.discordId]
+    local reply = { replyTo = command.replyTo, ok = username ~= nil, user = username }
+
+    if username then
+        local rows = zBay_Mailbox.rows(username)
+        local items = {}
+
+        for i = 1, math.min(#rows, MAIL_LINES) do
+            items[#items + 1] = { item = rows[i].n, qty = rows[i].q }
+        end
+
+        reply.items = items
+        reply.lines = #rows
+        reply.total = zBay_Mailbox.count(username)
+        -- whether there is a mailbox to collect at, and whether one is needed.
+        reply.claimed = zBay_State.ensure().mailboxes[username] ~= nil
+        reply.required = zBay_Config.data.mailbox.required == true
+    end
+
+    zBay_queue("reply", reply)
 end
 
 -- reads in.log from the top and acts on every command newer than the last one acted on.

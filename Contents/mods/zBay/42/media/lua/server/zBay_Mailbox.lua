@@ -135,6 +135,43 @@ function zBay_Mailbox.deliver(username, fullType, snap, qty, name, cond)
     return given, queued
 end
 
+-- what the debug menu's test mail is made of: a stack on one line, something with a
+-- condition, and enough weight that one collection cannot carry all of it.
+zBay_Mailbox.TEST_MAIL = {
+    { "Base.Nails", 50 },
+    { "Base.Axe", 1 },
+    { "Base.Log", 6 },
+}
+
+-- dummy mail, for trying the mailbox out without a second player to buy from. queued and
+-- never handed straight over: collecting is the thing being tried. each line is announced
+-- the way real mail is, so the toast and the discord message are tried with it. returns how
+-- many items.
+function zBay_Mailbox.sendTest(username)
+    if not username then return 0 end
+
+    local queued = 0
+
+    for _, entry in ipairs(zBay_Mailbox.TEST_MAIL) do
+        local fullType, count = entry[1], entry[2]
+        local item = instanceItem(fullType)
+        local snap = item and zBay_ItemSnap.capture(item) or nil
+
+        -- a type this version of the game has dropped is left out, not an error.
+        if snap then
+            local name = item:getDisplayName() or fullType
+
+            zBay_Mailbox.push(username, fullType, snap, count, name, zBay_ItemSnap.condition(item))
+            zBay_Notify.tell(username, "Mail", name, nil)
+            queued = queued + count
+        end
+    end
+
+    if queued > 0 then zBay_Mailbox.sync(username) end
+
+    return queued
+end
+
 -- ----------------------------------------------------------------------------
 -- the tile
 -- ----------------------------------------------------------------------------
