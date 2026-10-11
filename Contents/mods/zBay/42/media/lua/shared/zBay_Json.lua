@@ -328,61 +328,66 @@ local function zBay_quote(text)
     return '"' .. table.concat(out) .. '"'
 end
 
--- the indented writer. a whole number goes out with %.0f: every number is a double here, a
--- tile coordinate written as 10629.0 reads like somebody made a mistake, and a time in epoch
--- milliseconds is past what %d is promised to hold. an empty table is written as a list: lua
--- cannot tell an empty list from an empty object, and everything this writes that can be empty
--- is a list. keys are sorted, because pairs() has no order and a file that reshuffles itself on
--- every write cannot be diffed or read.
-local function zBay_write(value, depth, rank, out)
+-- anything but a table with something in it, as json, or nil for one of those. a whole number
+-- goes out with %.0f: every number is a double here, a tile coordinate written as 10629.0 reads
+-- like somebody made a mistake, and a time in epoch milliseconds is past what %d is promised to
+-- hold. an empty table is written as a list: lua cannot tell an empty list from an empty object,
+-- and everything written here that can be empty is a list.
+local function zBay_plain(value)
     local kind = type(value)
 
-    if kind == "string" then
-        out[#out + 1] = zBay_quote(value)
-    elseif kind == "number" then
-        if value == math.floor(value) then
-            out[#out + 1] = string.format("%.0f", value)
-        else
-            out[#out + 1] = tostring(value)
-        end
-    elseif kind == "boolean" then
-        out[#out + 1] = value and "true" or "false"
-    elseif kind ~= "table" then
-        out[#out + 1] = "null"
-    elseif table.isempty(value) then
-        out[#out + 1] = "[]"
-    else
-        local inner = string.rep("  ", depth + 1)
-        local outer = string.rep("  ", depth)
-
-        if #value > 0 then
-            out[#out + 1] = "[\n"
-            for i, item in ipairs(value) do
-                out[#out + 1] = inner
-                zBay_write(item, depth + 1, rank, out)
-                out[#out + 1] = i < #value and ",\n" or "\n"
-            end
-            out[#out + 1] = outer .. "]"
-        else
-            local keys = {}
-            for key in pairs(value) do keys[#keys + 1] = tostring(key) end
-
-            table.sort(keys, function(a, b)
-                local ra, rb = rank[a], rank[b]
-                if ra and rb then return ra < rb end
-                if ra or rb then return ra ~= nil end
-                return a < b
-            end)
-
-            out[#out + 1] = "{\n"
-            for i, key in ipairs(keys) do
-                out[#out + 1] = inner .. zBay_quote(key) .. ": "
-                zBay_write(value[key], depth + 1, rank, out)
-                out[#out + 1] = i < #keys and ",\n" or "\n"
-            end
-            out[#out + 1] = outer .. "}"
-        end
+    if kind == "string" then return zBay_quote(value) end
+    if kind == "number" then
+        if value == math.floor(value) then return string.format("%.0f", value) end
+        return tostring(value)
     end
+    if kind == "boolean" then return value and "true" or "false" end
+    if kind ~= "table" then return "null" end
+    if table.isempty(value) then return "[]" end
+
+    return nil
+end
+
+-- the indented writer. keys are sorted, because pairs() has no order and a file that reshuffles
+-- itself on every write cannot be diffed or read.
+local function zBay_write(value, depth, rank, out)
+    local plain = zBay_plain(value)
+    if plain then
+        out[#out + 1] = plain
+        return
+    end
+
+    local inner = string.rep("  ", depth + 1)
+    local outer = string.rep("  ", depth)
+
+    if #value > 0 then
+        out[#out + 1] = "[\n"
+        for i, item in ipairs(value) do
+            out[#out + 1] = inner
+            zBay_write(item, depth + 1, rank, out)
+            out[#out + 1] = i < #value and ",\n" or "\n"
+        end
+        out[#out + 1] = outer .. "]"
+        return
+    end
+
+    local keys = {}
+    for key in pairs(value) do keys[#keys + 1] = tostring(key) end
+
+    table.sort(keys, function(a, b)
+        local ra, rb = rank[a], rank[b]
+        if ra and rb then return ra < rb end
+        if ra or rb then return ra ~= nil end
+        return a < b
+    end)
+
+    out[#out + 1] = "{\n"
+    for i, key in ipairs(keys) do
+        out[#out + 1] = inner .. zBay_quote(key) .. ": "
+        zBay_write(value[key], depth + 1, rank, out)
+        out[#out + 1] = i < #keys and ",\n" or "\n"
+    end
+    out[#out + 1] = outer .. "}"
 end
 
 -- written to be opened and edited by hand: indented, one key to a line. order names the
@@ -399,42 +404,33 @@ end
 -- the one-line writer. keys are sorted, so the same event is the same bytes every time it is
 -- written.
 local function zBay_writeLine(value, out)
-    local kind = type(value)
+    local plain = zBay_plain(value)
+    if plain then
+        out[#out + 1] = plain
+        return
+    end
 
-    if kind == "string" then
-        out[#out + 1] = zBay_quote(value)
-    elseif kind == "number" then
-        if value == math.floor(value) then
-            out[#out + 1] = string.format("%.0f", value)
-        else
-            out[#out + 1] = tostring(value)
-        end
-    elseif kind == "boolean" then
-        out[#out + 1] = value and "true" or "false"
-    elseif kind ~= "table" then
-        out[#out + 1] = "null"
-    elseif table.isempty(value) then
-        out[#out + 1] = "[]"
-    elseif #value > 0 then
+    if #value > 0 then
         out[#out + 1] = "["
         for i, item in ipairs(value) do
             if i > 1 then out[#out + 1] = "," end
             zBay_writeLine(item, out)
         end
         out[#out + 1] = "]"
-    else
-        local keys = {}
-        for key in pairs(value) do keys[#keys + 1] = tostring(key) end
-        table.sort(keys)
-
-        out[#out + 1] = "{"
-        for i, key in ipairs(keys) do
-            if i > 1 then out[#out + 1] = "," end
-            out[#out + 1] = zBay_quote(key) .. ":"
-            zBay_writeLine(value[key], out)
-        end
-        out[#out + 1] = "}"
+        return
     end
+
+    local keys = {}
+    for key in pairs(value) do keys[#keys + 1] = tostring(key) end
+    table.sort(keys)
+
+    out[#out + 1] = "{"
+    for i, key in ipairs(keys) do
+        if i > 1 then out[#out + 1] = "," end
+        out[#out + 1] = zBay_quote(key) .. ":"
+        zBay_writeLine(value[key], out)
+    end
+    out[#out + 1] = "}"
 end
 
 -- the same value with no whitespace and no newline in it, for a file that is one record to

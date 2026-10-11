@@ -59,6 +59,15 @@ local function zBay_selectedLine(row)
     return line
 end
 
+-- an admin can take any listing down, from either tab that shows them.
+local function zBay_addRemove(panel)
+    if not S.admin then return end
+
+    panel:addButton("remove", "IGUI_zBay_Remove", function(p)
+        if p.selected then S.send("adminRemove", { id = p.selected.id }) end
+    end, true)
+end
+
 defs.browse = {
     title = "IGUI_zBay_Tab_Browse",
     market = true,
@@ -82,11 +91,7 @@ defs.browse = {
             S.send("buy", { id = row.id, qty = zBay_number(p, "qty") or 1 })
         end, true)
 
-        if S.admin then
-            panel:addButton("remove", "IGUI_zBay_Remove", function(p)
-                if p.selected then S.send("adminRemove", { id = p.selected.id }) end
-            end, true)
-        end
+        zBay_addRemove(panel)
     end,
 
     info = function(panel, row)
@@ -133,11 +138,7 @@ defs.auctions = {
             end, true)
         end
 
-        if S.admin then
-            panel:addButton("remove", "IGUI_zBay_Remove", function(p)
-                if p.selected then S.send("adminRemove", { id = p.selected.id }) end
-            end, true)
-        end
+        zBay_addRemove(panel)
     end,
 
     -- the least that would be accepted goes into the box, so one press is a valid bid.

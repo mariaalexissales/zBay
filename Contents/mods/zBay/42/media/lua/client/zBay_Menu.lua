@@ -15,14 +15,6 @@ zBay_Menu = zBay_Menu or {}
 
 local S = zBay_ClientState
 
-local function zBay_clickedSquare(worldobjects)
-    local fetch = ISWorldObjectContextMenu.fetchVars
-    if fetch and fetch.clickedSquare then return fetch.clickedSquare end
-
-    local first = worldobjects and worldobjects[1] or nil
-    return first and first:getSquare() or nil
-end
-
 -- the square with a mailbox on it, out of whatever the click landed on. a mailbox is drawn
 -- up the screen from its tile, so the click is as likely to name the tile behind it: every
 -- object handed over is looked at, not just the first.

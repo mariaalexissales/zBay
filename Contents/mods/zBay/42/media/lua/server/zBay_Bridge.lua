@@ -67,19 +67,10 @@ local function zBay_currency()
     return { name = currency.name, symbol = currency.symbol }
 end
 
--- held in memory until the next pump, so a burst of bids is one write and not one each.
--- what is lost if the server dies in that second is a few announcements, never money.
---
--- the first record of every boot is a hello, whatever was about to be first. it says which
--- world this is and what the money is called, so nothing after it is announced as a bare
--- number. sent from here and not at boot: a bridge switched on by a reload an hour in still
--- has to open with it.
-local function zBay_queue(kind, payload)
-    if not saidHello then
-        saidHello = true
-        zBay_queue("hello", { boot = boot, world = zBay_Files.world(), v = zBay.SCHEMA_V, currency = zBay_currency() })
-    end
-
+-- numbered, stamped and held in memory until the next pump, so a burst of bids is one write
+-- and not one each. what is lost if the server dies in that second is a few announcements,
+-- never money.
+local function zBay_push(kind, payload)
     local data = zBay_State.ensure()
     data.bridge.outSeq = data.bridge.outSeq + 1
 
@@ -89,6 +80,22 @@ local function zBay_queue(kind, payload)
     payload.t = zBay.now()
 
     queue[#queue + 1] = payload
+end
+
+-- the first record of every boot, whatever was about to be first. it says which world this is
+-- and what the money is called, so nothing after it is announced as a bare number. asked for
+-- before every record and not sent at boot: a bridge switched on by a reload an hour in still
+-- has to open with it.
+local function zBay_hello()
+    if saidHello then return end
+    saidHello = true
+
+    zBay_push("hello", { boot = boot, world = zBay_Files.world(), v = zBay.SCHEMA_V, currency = zBay_currency() })
+end
+
+local function zBay_queue(kind, payload)
+    zBay_hello()
+    zBay_push(kind, payload)
 end
 
 function zBay_Bridge.emit(kind, payload)
@@ -154,11 +161,9 @@ local function zBay_snapshot()
         }
     end
 
-    local currency = zBay_Config.data.currency
-
     local text = zBay_Json.line({
         t = zBay.now(), rev = data.rev, total = #listings,
-        currency = { name = currency.name, symbol = currency.symbol },
+        currency = zBay_currency(),
         listings = rows,
     })
 
@@ -342,11 +347,7 @@ function zBay_Bridge.pump(now)
         return
     end
 
-    if not saidHello then
-        saidHello = true
-        zBay_queue("hello", { boot = boot, world = zBay_Files.world(), v = zBay.SCHEMA_V, currency = zBay_currency() })
-    end
-
+    zBay_hello()
     zBay_flush()
 
     local stamp = getTimestampMs()

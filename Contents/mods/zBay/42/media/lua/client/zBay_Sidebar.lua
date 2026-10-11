@@ -167,16 +167,17 @@ function zBay_Popup:hideTooltip()
     end
 end
 
--- makes the cell if there is none and puts it in its place. true when it should be out.
+-- makes the cell if there is none and puts it in its place. true when it should be out,
+-- false when it should not, and nil for a sidebar that is not ours to touch.
 --
 -- a sandbox with the map switched off has no map button to hang off. nothing is put in its
 -- place: the right-click on the floor is still there, and a sidebar button of our own would
 -- fight any other mod's for the bottom of the column.
 local function zBay_ensureIcon(panel)
-    if not panel or not panel.chr or panel.chr:getPlayerNum() ~= 0 then return false end
-    if not zBay_isCurrentPanel(panel) then return false end
+    if not panel or not panel.chr or panel.chr:getPlayerNum() ~= 0 then return nil end
+    if not zBay_isCurrentPanel(panel) then return nil end
 
-    if not panel.mapBtn then return false end
+    if not panel.mapBtn then return nil end
 
     local textureWidth = zBay_textureWidth()
     local textureHeight = textureWidth * 0.75
@@ -239,9 +240,9 @@ local function zBay_patchSidebar()
 
     function ISEquippedItem:prerender()
         if originalPrerender then originalPrerender(self) end
-        if not zBay_isCurrentPanel(self) then return end
 
-        zBay_updateVisibility(self, zBay_ensureIcon(self))
+        local hostOut = zBay_ensureIcon(self)
+        if hostOut ~= nil then zBay_updateVisibility(self, hostOut) end
     end
 
     function ISEquippedItem:removeFromUIManager()
@@ -260,7 +261,7 @@ local function zBay_patchSidebar()
 
     function ISEquippedItem:checkSidebarSizeOption()
         if originalCheckSize then originalCheckSize(self) end
-        if zBay_isCurrentPanel(self) then zBay_ensureIcon(self) end
+        zBay_ensureIcon(self)
     end
 end
 

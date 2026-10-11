@@ -91,8 +91,6 @@ function zBay_Commands.handlers.page(player, args)
     local username = zBay.nameOf(player)
     if not username then return end
 
-    args = type(args) == "table" and args or {}
-
     if args.view == "mail" then
         zBay_Net.toClient(player, "page", { view = "mail", rows = zBay_Mailbox.rows(username) })
         return
@@ -131,8 +129,8 @@ end
 
 -- no amount is "everything on me".
 function zBay_Commands.handlers.deposit(player, args)
-    local amount = type(args) == "table" and args.amount ~= nil and zBay_Money.amount(args.amount) or nil
-    if type(args) == "table" and args.amount ~= nil and not amount then
+    local amount = args.amount ~= nil and zBay_Money.amount(args.amount) or nil
+    if args.amount ~= nil and not amount then
         zBay_reply(player, false, "Invalid")
         return
     end
@@ -149,7 +147,7 @@ end
 -- a short payout is still a success: the cap, the weight or the smallest note stopped it, and
 -- the rest never left the bank.
 function zBay_Commands.handlers.withdraw(player, args)
-    local amount = type(args) == "table" and zBay_Money.amount(args.amount) or nil
+    local amount = zBay_Money.amount(args.amount)
     if not amount then
         zBay_reply(player, false, "Invalid")
         return
@@ -167,18 +165,15 @@ function zBay_Commands.handlers.withdraw(player, args)
 end
 
 function zBay_Commands.handlers.mailSet(player, args)
-    args = type(args) == "table" and args or {}
     zBay_reply(player, zBay_Mailbox.set(player, args.x, args.y, args.z))
 end
 
 function zBay_Commands.handlers.mailCollect(player, args)
-    local atBox = type(args) == "table" and args.atBox == true
-    zBay_reply(player, zBay_Mailbox.collect(player, atBox))
+    zBay_reply(player, zBay_Mailbox.collect(player, args.atBox == true))
 end
 
 function zBay_Commands.handlers.link(player, args)
-    local code = type(args) == "table" and args.code or nil
-    zBay_reply(player, zBay_Bridge.link(zBay.nameOf(player), code))
+    zBay_reply(player, zBay_Bridge.link(zBay.nameOf(player), args.code))
 end
 
 -- every one of these is a button only admins are drawn, and the client draws the button.
@@ -284,7 +279,8 @@ end
 
 -- a command inside its floor is dropped without a word. the client paces itself to the same
 -- floors, so a packet that lands inside one is a double-click or somebody who is not using the
--- window.
+-- window. args is whatever the client typed, so it is made a table here, once, and every
+-- handler can index it. in singleplayer zBay_Net calls the handlers itself, with a table.
 local function zBay_onClientCommand(module, command, player, args)
     if module ~= zBay.MODULE then return end
 
@@ -296,7 +292,7 @@ local function zBay_onClientCommand(module, command, player, args)
 
     if not zBay_allowed(username, command, getTimestampMs()) then return end
 
-    local ok, err = pcall(handler, player, args)
+    local ok, err = pcall(handler, player, type(args) == "table" and args or {})
     if not ok then
         zBay.warn("command " .. tostring(command) .. " failed: " .. tostring(err))
         zBay_reply(player, false, "Failed")
