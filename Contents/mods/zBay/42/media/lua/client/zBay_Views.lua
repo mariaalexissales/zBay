@@ -400,17 +400,6 @@ defs.bank = {
                 S.send("link", { code = p:value("code") })
             end, false)
         end
-
-        if S.admin then
-            panel:addButton("backup", "IGUI_zBay_Backup", function()
-                S.send("adminBackup", {})
-            end, false)
-            panel:addButton("restore", "IGUI_zBay_Restore", function(p)
-                p:confirm(getText("IGUI_zBay_RestoreConfirm"), function()
-                    S.send("adminRestore", {})
-                end)
-            end, false)
-        end
     end,
 
     hint = function()

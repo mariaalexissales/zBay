@@ -46,6 +46,10 @@ function zBay.getWindow(playerNum)
     return data and data.instance or nil
 end
 
+function zBay.isWindowOpen(playerNum)
+    return zBay.getWindow(playerNum) ~= nil
+end
+
 function zBay_Panel:new(x, y, width, height, player)
     local o = ISCollapsableWindow:new(x, y, width, height)
     setmetatable(o, self)
@@ -167,18 +171,22 @@ function zBay_Panel:createChildren()
     self.next = zBay_Theme.attach(self,
         zBay_Button:new(PAD + 34, footY, 30, FOOTER_H - 4, ">", self, zBay_Panel.onNext))
 
-    self.refreshBtn = zBay_Button:new(0, footY, 10, FOOTER_H - 4, getText("IGUI_zBay_Refresh"), self,
-        zBay_Panel.onRefresh)
-    self.refreshBtn:sizeToTitle(24)
-    self.refreshBtn:setX(self.width - PAD - self.refreshBtn:getWidth())
-    zBay_Theme.attach(self, self.refreshBtn, { anchorLeft = false, anchorRight = true })
+    -- hung off the right edge, each to the left of the one before it.
+    local function foot(title, onclick, before)
+        local button = zBay_Button:new(0, footY, 10, FOOTER_H - 4, getText(title), self, onclick)
+        button:sizeToTitle(24)
+        button:setX((before and before:getX() - 4 or self.width - PAD) - button:getWidth())
+        return zBay_Theme.attach(self, button, { anchorLeft = false, anchorRight = true })
+    end
 
-    -- inside the always-visible one, so refresh keeps a fixed spot whoever is looking.
-    self.reload = zBay_Button:new(0, footY, 10, FOOTER_H - 4, getText("IGUI_zBay_Reload"), self,
-        zBay_Panel.onReload)
-    self.reload:sizeToTitle(24)
-    self.reload:setX(self.refreshBtn:getX() - 4 - self.reload:getWidth())
-    zBay_Theme.attach(self, self.reload, { anchorLeft = false, anchorRight = true })
+    self.refreshBtn = foot("IGUI_zBay_Refresh", zBay_Panel.onRefresh, nil)
+
+    -- inside the always-visible one, so refresh keeps a fixed spot whoever is looking. down
+    -- here and not on a tab's strip: none of them is about the tab that happens to be open.
+    self.reload = foot("IGUI_zBay_Reload", zBay_Panel.onReload, self.refreshBtn)
+    self.restore = foot("IGUI_zBay_Restore", zBay_Panel.onRestore, self.reload)
+    self.backup = foot("IGUI_zBay_Backup", zBay_Panel.onBackup, self.restore)
+    self.adminButtons = { self.reload, self.restore, self.backup }
 
     self:setView(self.view)
 end
@@ -390,6 +398,17 @@ function zBay_Panel:onReload()
     S.send("adminReload", {})
 end
 
+function zBay_Panel:onBackup()
+    S.send("adminBackup", {})
+end
+
+-- asked first: it puts every balance and listing back to what the file says.
+function zBay_Panel:onRestore()
+    self:confirm(getText("IGUI_zBay_RestoreConfirm"), function()
+        S.send("adminRestore", {})
+    end)
+end
+
 -- ----------------------------------------------------------------------------
 -- rows
 -- ----------------------------------------------------------------------------
@@ -467,7 +486,7 @@ function zBay_Panel:prerender()
         button:setVisible(not def.enabled or def.enabled())
     end
 
-    if self.reload then self.reload:setVisible(S.admin) end
+    for _, button in ipairs(self.adminButtons or {}) do button:setVisible(S.admin) end
 end
 
 function zBay_Panel:render()
@@ -533,9 +552,12 @@ function zBay_Panel:render()
     -- the last thing the server said, for the few seconds it is news.
     local status = S.status
     if status and getTimestampMs() - status.at < 8000 then
-        local room = (S.admin and self.reload:getX() or self.refreshBtn:getX()) - x - PAD
-        zBay_Theme.text(self, zBay_Theme.truncate(status.text, room, font), x, footY,
-            status.good and zBay_Theme.COL_GOOD or zBay_Theme.COL_BAD, font)
+        -- up to the leftmost button showing. an admin at the narrowest window has none left.
+        local room = (S.admin and self.backup:getX() or self.refreshBtn:getX()) - x - PAD
+        if room > 0 then
+            zBay_Theme.text(self, zBay_Theme.truncate(status.text, room, font), x, footY,
+                status.good and zBay_Theme.COL_GOOD or zBay_Theme.COL_BAD, font)
+        end
     end
 end
 
@@ -636,7 +658,7 @@ function zBay_Panel:onResize()
     self.prev:setY(footY)
     self.next:setY(footY)
     self.refreshBtn:setY(footY)
-    self.reload:setY(footY)
+    for _, button in ipairs(self.adminButtons) do button:setY(footY) end
 end
 
 function zBay_Panel:close()
@@ -710,6 +732,17 @@ function zBay.openPanel(player, view, itemId)
         window:setView(view)
     else
         window:onRefresh()
+    end
+end
+
+-- what the sidebar's cell does: one click to open, the next to close.
+function zBay.togglePanel(player)
+    local playerNum = player and player:getPlayerNum() or 0
+
+    if zBay.isWindowOpen(playerNum) then
+        zBay.getWindow(playerNum):close()
+    else
+        zBay.openPanel(player)
     end
 end
 
