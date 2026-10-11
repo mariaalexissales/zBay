@@ -64,10 +64,6 @@ function zBay_Bank.debit(username, amount, code, info)
     return true
 end
 
--- ----------------------------------------------------------------------------
--- pockets
--- ----------------------------------------------------------------------------
-
 -- taken from wherever it sits, bag or pocket, and told to the client from the container it
 -- actually left: the removal packet names a container, and naming the wrong one leaves a
 -- ghost in the bag on the client.
@@ -142,7 +138,9 @@ function zBay_Bank.deposit(player, amount)
 end
 
 -- returns what was paid out. short of what was asked when it would not all fit, when the item
--- cap ran out, or when no note is small enough for the tail; the rest never left the bank.
+-- cap ran out, or when no note is small enough for the tail; the rest never left the bank. a
+-- note that will not fit ends the press: the inventory is full, and nothing lighter is worth
+-- trying after it.
 function zBay_Bank.withdraw(player, amount)
     local username = zBay.nameOf(player)
     amount = zBay.int(amount, 1)
@@ -158,8 +156,6 @@ function zBay_Bank.withdraw(player, amount)
         local given = zBay_give(player, part.item, part.count)
         paid = paid + given * part.value
 
-        -- a note that would not fit means nothing lighter is worth trying after it in the
-        -- same press: the inventory is full.
         if given < part.count then break end
     end
 

@@ -32,10 +32,6 @@ local function zBay_emit(kind, payload)
     if zBay_Bridge and zBay_Bridge.emit then zBay_Bridge.emit(kind, payload) end
 end
 
--- ----------------------------------------------------------------------------
--- selling
--- ----------------------------------------------------------------------------
-
 local function zBay_isCurrency(fullType)
     for _, denom in ipairs(zBay_Config.data.currency.items) do
         if denom.item == fullType then return true end
@@ -73,7 +69,12 @@ local function zBay_matching(inventory, base, snap, qty)
 end
 
 -- args: itemId, qty, kind ("f" fixed or "a" auction), price (each, or the opening bid),
--- buyout and hours for an auction.
+-- buyout and hours for an auction. a buyout at or under the opening bid is a fixed price
+-- wearing a hat, and refused. verify() is the gate: past it, rebuilding the item for a buyer
+-- has already worked once. the name and category are read while the item is still in a
+-- container, since some of them answer differently once it is not, and the name is lowered
+-- once here rather than on every search. fewer taken than asked is not a failure: the
+-- client's stack was a guess at what matched.
 function zBay_Market.sell(player, args)
     local username = zBay.nameOf(player)
     if not username or type(args) ~= "table" then return false, "Invalid" end
@@ -91,7 +92,6 @@ function zBay_Market.sell(player, args)
     local buyout = nil
     if kind == "a" and config.auction.allowBuyout and args.buyout ~= nil then
         buyout = zBay_Rules.price(args.buyout)
-        -- a buyout at or under the opening bid is a fixed price wearing a hat.
         if not buyout or buyout <= price then return false, "BuyoutLow" end
     end
 
@@ -114,11 +114,9 @@ function zBay_Market.sell(player, args)
         return false, "Blacklisted"
     end
 
-    -- the gate. past this line, rebuilding the item for a buyer has already worked once.
     local snap, reason = zBay_ItemSnap.verify(base)
     if not snap then return false, reason or "State" end
 
-    -- read while it is still in a container. some of these answer differently once it is not.
     local name = base:getDisplayName() or fullType
     local cond = zBay_ItemSnap.condition(base)
 
@@ -146,7 +144,6 @@ function zBay_Market.sell(player, args)
         s = username,
         t = fullType,
         n = name,
-        -- lowered once here rather than on every search.
         ln = string.lower(name),
         c = category,
         cp = cond,
@@ -173,13 +170,8 @@ function zBay_Market.sell(player, args)
 
     zBay.trace(username .. " listed " .. taken .. " " .. fullType .. " as " .. listing.id)
 
-    -- fewer than asked is not a failure: the client's stack was a guess at what matched.
     return true, taken < qty and "ListedSome" or "Listed", taken
 end
-
--- ----------------------------------------------------------------------------
--- buying and taking down
--- ----------------------------------------------------------------------------
 
 -- player is optional. only the buyer's name is needed to move money and queue mail, which is
 -- what lets this be called for somebody who is not standing in the world.
@@ -230,6 +222,9 @@ local function zBay_returnStock(listing, code)
     if code then zBay_Notify.tell(listing.s, code, listing.n, nil) end
 end
 
+-- takes a listing down and sends the stock home. an auction with a bid on it stays up unless
+-- an admin asks: a seller who could pull a lot once the bidding went badly would do exactly
+-- that.
 function zBay_Market.cancel(username, args, asAdmin)
     if not username or type(args) ~= "table" then return false, "Invalid" end
 
@@ -238,7 +233,6 @@ function zBay_Market.cancel(username, args, asAdmin)
     if listing.s ~= username and not asAdmin then return false, "NotYours" end
 
     if listing.k == "a" and listing.bd then
-        -- a seller who could pull a lot once the bidding went badly would do exactly that.
         if not asAdmin then return false, "HasBids" end
 
         zBay_Bank.credit(listing.bd, listing.b, "BidRefund", listing.n)
@@ -254,10 +248,6 @@ end
 function zBay_Market.expire(listing)
     zBay_returnStock(listing, "Expired")
 end
-
--- ----------------------------------------------------------------------------
--- asking what is for sale
--- ----------------------------------------------------------------------------
 
 local function zBay_shownPrice(listing)
     if listing.k == "a" then return listing.b or listing.sb end
@@ -362,7 +352,8 @@ local function zBay_categories()
     return out
 end
 
--- args: view, cat, q, sort, page. returns the reply to send as it stands.
+-- args: view, cat, q, sort, page. returns the reply to send as it stands. the search is a
+-- plain find, so one for "(" or "%" is a search and not a broken pattern.
 function zBay_Market.query(viewer, args)
     args = type(args) == "table" and args or {}
 
@@ -379,7 +370,6 @@ function zBay_Market.query(viewer, args)
         list = zBay_sorted(view, category, sort)
     end
 
-    -- plain find, so a search for "(" or "%" is a search and not a broken pattern.
     local search = type(args.q) == "string" and string.lower(args.q:sub(1, zBay_Rules.MAX_SEARCH)) or ""
     if search ~= "" then
         local matched = {}

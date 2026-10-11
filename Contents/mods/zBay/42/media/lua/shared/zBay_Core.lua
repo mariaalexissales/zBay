@@ -64,8 +64,10 @@ end
 -- the first few failures are logged with the reason, then the handler takes itself off.
 local GUARD_LIMIT = 3
 
--- four parameters rather than varargs: no vanilla lua forwards ... into pcall, and kahlua is
--- not a lua to assume things about.
+-- registers fn on event behind a pcall, and takes it off after GUARD_LIMIT failures in a row.
+-- in a row, not in total: a hiccup should not retire a working handler. four parameters rather
+-- than varargs: no vanilla lua forwards ... into pcall, and kahlua is not a lua to assume
+-- things about.
 function zBay.guard(name, event, fn)
     local failures = 0
     local wrapped
@@ -74,7 +76,6 @@ function zBay.guard(name, event, fn)
         local ok, err = pcall(fn, a, b, c, d)
 
         if ok then
-            -- consecutive, not cumulative: a hiccup should not retire a working handler.
             failures = 0
             return
         end
@@ -104,14 +105,14 @@ function zBay.now()
 end
 
 -- epoch milliseconds to "YYYY-MM-DD HH:MM:SS UTC". only ever read by a human, so the
--- arithmetic is done here rather than leaning on Calendar's field constants.
+-- arithmetic is done here rather than leaning on Calendar's field constants: days-to-civil in
+-- its shift-to-March form, where leap years land at the end of the cycle and stop being a
+-- special case.
 function zBay.stampText(ms)
     local secs = math.floor((tonumber(ms) or 0) / 1000)
     local days = math.floor(secs / 86400)
     local rest = secs - days * 86400
 
-    -- days-to-civil, the shift-to-March form: leap years land at the end of the cycle and
-    -- stop being a special case.
     local z = days + 719468
     local era = math.floor(z / 146097)
     local doe = z - era * 146097

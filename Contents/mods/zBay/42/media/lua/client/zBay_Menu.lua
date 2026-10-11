@@ -83,24 +83,27 @@ function zBay_Menu.onCollect(playerNum, x, y, z)
 end
 
 -- the Pre event, because the plain one is skipped inside a safehouse the player has no
--- rights in, and a market that closes at somebody's front door is not much of one.
+-- rights in, and a market that closes at somebody's front door is not much of one. a
+-- controller probing with test is told there is something to do here: there always is.
+--
+-- the hello on the way in can be lost: on a multiplayer client OnCreatePlayer may fire
+-- before there is a player to send it as. without the settings a mailbox is just a tile,
+-- so a right-click is taken as a reason to ask again.
+--
+-- the test mail entry is debug mode only, and not a translated string, as no player is meant
+-- to see it; the server asks about admin again. an empty mailbox's collect entry is greyed,
+-- not hidden: one that vanishes reads as the mailbox having stopped being theirs.
 local function zBay_onPreFill(playerNum, context, worldobjects, test)
     if playerNum ~= 0 then return end
 
-    -- a controller probing for whether there is anything to do here. there always is.
     if test then return ISWorldObjectContextMenu.setTest() end
 
     context:addOption(getText("IGUI_zBay_Open"), playerNum, zBay_Menu.onOpen)
 
-    -- debug mode only: mail to try the mailbox with, with nobody else on to buy from. not a
-    -- translated string, as no player is meant to see it. the server asks about admin again.
     if getDebug() and S.admin then
         context:addOption("zBay: Send Test Mail", playerNum, zBay_Menu.onTestMail)
     end
 
-    -- the hello on the way in can be lost: on a multiplayer client OnCreatePlayer may fire
-    -- before there is a player to send it as. without the settings a mailbox is just a tile,
-    -- so a right-click is taken as a reason to ask again.
     if not S.config then S.hello() end
 
     local square = zBay_clickedMailbox(worldobjects)
@@ -111,8 +114,6 @@ local function zBay_onPreFill(playerNum, context, worldobjects, test)
     if S.mail.x == x and S.mail.y == y and S.mail.z == z then
         local option = context:addOption(getText("IGUI_zBay_CollectMail", S.mail.n or 0), playerNum,
             zBay_Menu.onCollect, x, y, z)
-        -- greyed, not hidden: an entry that vanishes when the box is empty reads as the
-        -- mailbox having stopped being theirs.
         if (S.mail.n or 0) <= 0 then option.notAvailable = true end
     else
         context:addOption(getText("IGUI_zBay_SetMailbox"), playerNum, zBay_Menu.onSetMailbox, x, y, z)
@@ -124,6 +125,7 @@ function zBay_Menu.onSell(playerNum, itemId)
 end
 
 -- items is whatever was right-clicked: single items, or stacks holding a list of them.
+-- nothing is offered for what would only be refused. the server asks again regardless.
 local function zBay_onFillInventory(playerNum, context, items)
     if playerNum ~= 0 then return end
 
@@ -131,7 +133,6 @@ local function zBay_onFillInventory(playerNum, context, items)
     local item = actual and actual[1] or nil
     if not item or not item:isInPlayerInventory() then return end
 
-    -- nothing offered for what would only be refused. the server asks again regardless.
     if zBay_ItemSnap.refusal(item) then return end
 
     context:addOption(getText("IGUI_zBay_SellThis"), playerNum, zBay_Menu.onSell, item:getID())

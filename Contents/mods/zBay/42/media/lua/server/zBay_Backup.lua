@@ -52,6 +52,10 @@ function zBay_Backup.spareName()
     return "backup_" .. zBay_Files.world() .. "_prev.json"
 end
 
+-- writes the file. savedAtText is for whoever opens it and is never read back. the previous
+-- payload goes to the spare before the main file is touched: a process killed between the two
+-- writes, the exact failure this file exists for, leaves the spare whole and only the main
+-- file torn, which is what read() is prepared for.
 function zBay_Backup.save()
     local data = zBay_State.ensure()
     local now = zBay.now()
@@ -60,7 +64,6 @@ function zBay_Backup.save()
         v = FILE_V,
         world = zBay_Files.world(),
         savedAt = now,
-        -- for whoever opens the file. never read back.
         savedAtText = zBay.stampText(now),
     }
 
@@ -72,9 +75,6 @@ function zBay_Backup.save()
         return false
     end
 
-    -- the previous payload goes to the spare before the main file is touched. a process
-    -- killed between these two writes -- the exact failure this file exists for -- leaves
-    -- the spare whole and only the main file torn, which is what read() is prepared for.
     if lastText then zBay_Files.write(zBay_Backup.spareName(), lastText) end
 
     if not zBay_Files.write(zBay_Backup.name(), text) then
@@ -121,12 +121,13 @@ function zBay_Backup.read()
 end
 
 -- unconditional. nothing calls this on its own: whoever did has decided the file is the truth.
+-- a file of the right syntax but the wrong shape is not a backup, and what the world save had
+-- is kept rather than replaced with nothing. nextId never goes backwards: an id handed out
+-- since the file was written must not be handed out again.
 function zBay_Backup.load()
     local parsed, from, text = zBay_Backup.read()
     if not parsed then return false end
 
-    -- a file of the right syntax but the wrong shape is not a backup. better to keep what
-    -- the world save had than to replace it with nothing.
     if type(parsed.balances) ~= "table" or type(parsed.listings) ~= "table" then
         zBay.warn("the backup at " .. zBay_Files.shown(from) .. " has no balances or listings, ignoring it")
         return false
@@ -138,8 +139,6 @@ function zBay_Backup.load()
 
     for _, field in ipairs(FIELDS) do
         if field == "nextId" then
-            -- never backwards: an id handed out since the file was written must not be
-            -- handed out again.
             data.nextId = math.max(data.nextId or 0, zBay.int(parsed.nextId, 0) or 0)
         else
             data[field] = type(parsed[field]) == "table" and parsed[field] or {}
@@ -155,18 +154,18 @@ function zBay_Backup.load()
     return true
 end
 
+-- the old file is read before the first write, so the rotation has its payload rather than
+-- throwing it away; nothing is restored from it. then one save at boot: it creates the file
+-- on a server that has never had one, and surfaces a permissions problem now rather than at
+-- the shutdown it was supposed to cover.
 Events.OnInitGlobalModData.Add(function()
     zBay_State.ensure()
 
     if not zBay_Backup.enabled() then return end
 
-    -- read before the first write, so the rotation has the old payload rather than throwing
-    -- it away. nothing is restored from it.
     local _, _, text = zBay_Backup.read()
     lastText = text
 
-    -- once at boot: it creates the file on a server that has never had one, and surfaces a
-    -- permissions problem now rather than at the shutdown it was supposed to cover.
     zBay_Backup.save()
 end)
 

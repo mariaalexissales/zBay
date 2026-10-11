@@ -20,6 +20,7 @@ local BAD = { Outbid = true, NoBids = true, Expired = true, Removed = true, BidR
 
 -- code is the tail of a translation key. by convention a1 is an item's name and a2 an amount
 -- of money, which is what lets the client format the second in whatever the currency is now.
+-- the bridge is looked up when called: it loads after this file and is allowed not to exist.
 function zBay_Notify.tell(username, code, a1, a2)
     if not username then return end
 
@@ -31,7 +32,6 @@ function zBay_Notify.tell(username, code, a1, a2)
         zBay_State.note(username, code, a1, a2)
     end
 
-    -- looked up when called: the bridge loads after this file and is allowed not to exist.
     if zBay_Bridge and zBay_Bridge.notice then
         zBay_Bridge.notice(username, code, a1, a2)
     end

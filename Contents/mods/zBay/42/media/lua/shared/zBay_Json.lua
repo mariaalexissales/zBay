@@ -54,11 +54,13 @@ local function zBay_nextMeaningful(text, i)
     return nil
 end
 
--- a character scan, not a gsub: a naive comment strip eats the slashes in any url in a
--- description, and a naive comma strip eats commas in prose. only the in-string state
--- tells code from content.
+-- takes out a notepad bom, comments and trailing commas before the parser sees them. a
+-- character scan, not a gsub: a naive comment strip eats the slashes in any url in a
+-- description, and a naive comma strip eats commas in prose. only the in-string state tells
+-- code from content. newlines inside what is removed are kept, so a reported line number still
+-- matches the file. a comma is trailing when the next meaningful character closes the
+-- container, and a comment is not meaningful: "x": 1, // the last one  is how people write it.
 local function zBay_prepass(text)
-    -- notepad writes a bom and the parser would choke on it as a stray character.
     if text:sub(1, 3) == "\239\187\191" then text = text:sub(4) end
 
     local out, i, n = {}, 1, #text
@@ -82,19 +84,15 @@ local function zBay_prepass(text)
             out[#out + 1] = c
             i = i + 1
         elseif c == "/" and text:sub(i + 1, i + 1) == "/" then
-            -- the newline is kept so reported line numbers still match the file.
             local stop = text:find("\n", i, true)
             if not stop then break end
             i = stop
         elseif c == "/" and text:sub(i + 1, i + 1) == "*" then
             local stop = text:find("*/", i + 2, true)
             if not stop then break end
-            -- replaced by its own newlines, again to keep line numbers matching.
             for _ in text:sub(i, stop + 1):gmatch("\n") do out[#out + 1] = "\n" end
             i = stop + 2
         elseif c == "," then
-            -- a comma is trailing when the next meaningful character closes the container.
-            -- a comment is not meaningful: "x": 1, // the last one  is how people write it.
             local nextChar = zBay_nextMeaningful(text, i + 1)
             if nextChar == "}" or nextChar == "]" then
                 i = i + 1
@@ -125,7 +123,7 @@ function Parser:lineAt(pos)
 end
 
 -- nothing in the parser raises. the game logs every error() with a full java stack trace,
--- caught or not, and stops on it under Break On Error, so one mistyped quest file used to
+-- caught or not, and stops on it under Break On Error, so one mistyped settings file would
 -- look like a crash. a failure is written down instead and every caller backs out.
 --
 -- null is a legal value and decodes to nil, so nil cannot be what says a parse failed:
@@ -186,6 +184,7 @@ function Parser:parseNumber()
     return value
 end
 
+-- a null element is dropped: compacting beats a hole that breaks every ipairs and # downstream.
 function Parser:parseArray()
     self.pos = self.pos + 1
     local out = {}
@@ -197,7 +196,6 @@ function Parser:parseArray()
         local value = self:parseValue()
         if self.err then return nil end
 
-        -- compacting beats a hole that breaks every ipairs and # downstream.
         if value ~= nil then out[#out + 1] = value end
 
         self:skip()
@@ -213,6 +211,7 @@ function Parser:parseArray()
     end
 end
 
+-- a null value leaves its key absent, so the default applies.
 function Parser:parseObject()
     self.pos = self.pos + 1
     local out = {}
@@ -230,7 +229,6 @@ function Parser:parseObject()
         if self:peek() ~= ":" then return self:fail("expected a colon after key " .. key) end
         self.pos = self.pos + 1
 
-        -- null decodes to nil, so the key is absent and the default applies.
         local value = self:parseValue()
         if self.err then return nil end
         out[key] = value
@@ -274,7 +272,9 @@ function Parser:parseValue()
     return self:fail("unexpected character " .. c)
 end
 
--- returns the value, or nil plus a message. never raises.
+-- returns the value, or nil plus a message. never raises. a mistake in the file comes back
+-- through parser.err; the pcall is only for a mistake in the parser, which should cost a file,
+-- not a server.
 function zBay_Json.decode(text)
     if type(text) ~= "string" or text:match("^%s*$") then
         return nil, "file is empty"
@@ -282,8 +282,6 @@ function zBay_Json.decode(text)
 
     local parser = Parser.new(zBay_prepass(text))
 
-    -- a mistake in the file comes back through parser.err and never reaches this pcall.
-    -- it is only here for a mistake in the parser, which should cost a file, not a server.
     local ok, result = pcall(function()
         local value = parser:parseValue()
         if parser.err then return nil end
@@ -330,15 +328,18 @@ local function zBay_quote(text)
     return '"' .. table.concat(out) .. '"'
 end
 
+-- the indented writer. a whole number goes out with %.0f: every number is a double here, a
+-- tile coordinate written as 10629.0 reads like somebody made a mistake, and a time in epoch
+-- milliseconds is past what %d is promised to hold. an empty table is written as a list: lua
+-- cannot tell an empty list from an empty object, and everything this writes that can be empty
+-- is a list. keys are sorted, because pairs() has no order and a file that reshuffles itself on
+-- every write cannot be diffed or read.
 local function zBay_write(value, depth, rank, out)
     local kind = type(value)
 
     if kind == "string" then
         out[#out + 1] = zBay_quote(value)
     elseif kind == "number" then
-        -- every number is a double here, and a tile coordinate written as 10629.0 reads
-        -- like somebody made a mistake. %.0f and not %d: a time in epoch milliseconds is
-        -- past what %d is promised to hold.
         if value == math.floor(value) then
             out[#out + 1] = string.format("%.0f", value)
         else
@@ -349,8 +350,6 @@ local function zBay_write(value, depth, rank, out)
     elseif kind ~= "table" then
         out[#out + 1] = "null"
     elseif table.isempty(value) then
-        -- lua cannot tell an empty list from an empty object. everything this writes
-        -- that can be empty is a list.
         out[#out + 1] = "[]"
     else
         local inner = string.rep("  ", depth + 1)
@@ -365,8 +364,6 @@ local function zBay_write(value, depth, rank, out)
             end
             out[#out + 1] = outer .. "]"
         else
-            -- pairs() has no order, and a file that reshuffles itself on every write
-            -- cannot be diffed or read.
             local keys = {}
             for key in pairs(value) do keys[#keys + 1] = tostring(key) end
 
@@ -399,6 +396,8 @@ function zBay_Json.encode(value, order)
     return table.concat(out)
 end
 
+-- the one-line writer. keys are sorted, so the same event is the same bytes every time it is
+-- written.
 local function zBay_writeLine(value, out)
     local kind = type(value)
 
@@ -424,7 +423,6 @@ local function zBay_writeLine(value, out)
         end
         out[#out + 1] = "]"
     else
-        -- sorted, so the same event is the same bytes every time it is written.
         local keys = {}
         for key in pairs(value) do keys[#keys + 1] = tostring(key) end
         table.sort(keys)

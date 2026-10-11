@@ -134,10 +134,6 @@ zBay_Config.discord = zBay_Config.discord or zBay_discordDefaults()
 -- bumped on every load that took, so a client holding an older copy can be told.
 zBay_Config.rev = zBay_Config.rev or 0
 
--- ----------------------------------------------------------------------------
--- reading one value at a time
--- ----------------------------------------------------------------------------
-
 local function zBay_section(raw, key, notes)
     local value = raw[key]
     if value == nil then return {} end
@@ -199,6 +195,10 @@ local function zBay_itemExists(fullType)
     return ok and script ~= nil
 end
 
+-- an item the game does not have is a typo or a mod that is not loaded, and either way nobody
+-- can hold one, so it is skipped. items left out altogether is a file that never mentioned
+-- them, which is the default and not a mistake; there and empty is worth a line. so is a list
+-- with nothing worth 1: a withdrawal can only pay out multiples of the smallest note.
 local function zBay_currency(raw, defaults, notes)
     local out = { name = defaults.name, symbol = defaults.symbol, items = {} }
 
@@ -216,7 +216,6 @@ local function zBay_currency(raw, defaults, notes)
         elseif seen[item] then
             notes[#notes + 1] = "currency.items lists " .. item .. " twice, the second is skipped"
         elseif not zBay_itemExists(item) then
-            -- a typo, or a mod that is not loaded. either way nobody can hold one.
             notes[#notes + 1] = "currency.items: the game has no item " .. item .. ", skipped"
         else
             seen[item] = true
@@ -225,8 +224,6 @@ local function zBay_currency(raw, defaults, notes)
     end
 
     if #out.items == 0 then
-        -- left out altogether is a file that never mentioned it, which is the default and
-        -- not a mistake. there and empty is one worth a line.
         if raw.items ~= nil then
             notes[#notes + 1] = "currency.items has nothing usable in it, using Base.Money at 1"
         end
@@ -235,7 +232,6 @@ local function zBay_currency(raw, defaults, notes)
 
     out.items = zBay_Money.sorted(out.items)
 
-    -- a withdrawal can only pay out multiples of the smallest note. worth saying once.
     if out.items[#out.items].value ~= 1 then
         notes[#notes + 1] = "currency.items has nothing worth 1, so amounts that are not a multiple of "
             .. out.items[#out.items].value .. " cannot be withdrawn"
@@ -314,6 +310,8 @@ function zBay_Config.normalise(raw, notes)
     return out
 end
 
+-- endpoint and serverKey are the relay's to read. the game never opens a connection, so it does
+-- not keep them either.
 function zBay_Config.normaliseDiscord(raw, notes)
     local d = zBay_discordDefaults()
 
@@ -324,8 +322,6 @@ function zBay_Config.normaliseDiscord(raw, notes)
         events = {},
     }
 
-    -- endpoint and serverKey are the relay's to read. the game never opens a connection, so
-    -- it does not keep them either.
     local events = type(raw.events) == "table" and raw.events or {}
     for name, fallback in pairs(d.events) do
         out.events[name] = zBay_flag("discord.events", name, events, fallback, notes)
@@ -334,15 +330,12 @@ function zBay_Config.normaliseDiscord(raw, notes)
     return out
 end
 
--- ----------------------------------------------------------------------------
--- the files
--- ----------------------------------------------------------------------------
-
+-- writes a starter file where there is none. one that is there but unreadable is still
+-- somebody's file, and is left alone.
 local function zBay_seedOne(name, text)
     local existing, err = zBay_Files.read(name)
     if existing then return end
 
-    -- there but unreadable is still somebody's file.
     if err and err:find("^read failed") then return end
 
     if zBay_Files.write(name, text) then

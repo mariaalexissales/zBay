@@ -37,6 +37,8 @@ function zBay_Row.columns(width)
     }
 end
 
+-- moveWithMouse is off: an ISPanel would otherwise drag the window when the cursor goes down
+-- on it.
 function zBay_Row:new(x, y, width, height, panel)
     local o = ISPanel:new(x, y, width, height)
     setmetatable(o, self)
@@ -48,7 +50,6 @@ function zBay_Row:new(x, y, width, height, panel)
     o.cellsAt = 0
     o.backgroundColor = { r = 1, g = 1, b = 1, a = 0.03 }
     o.borderColor = { r = 0, g = 0, b = 0, a = 0 }
-    -- an ISPanel would otherwise drag the window when the cursor goes down on it.
     o.moveWithMouse = false
 
     return o

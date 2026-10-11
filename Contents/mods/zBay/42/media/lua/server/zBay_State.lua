@@ -29,6 +29,15 @@ zBay_State.nextDue = zBay_State.nextDue or nil
 -- global mod data, never player:getModData(): a client's own mod data is its copy and is never
 -- pushed up, so it cannot be trusted with a balance. and never transmitted: a client is sent
 -- its own balance and the page it asked for, nothing more.
+--
+--   rev        moves whenever the market does. a client holding an older number asks again.
+--   listings   id -> listing. ids are strings: a number key comes back from a save as a
+--              double, and "17" and 17.0 are different keys to everything that looks one up.
+--   mail       username -> list of { t = type, snap = , q = , n = name, cp = , at = }
+--   mailboxes  username -> { x, y, z }
+--   boxOwners  "x,y,z" -> list of usernames. a list, so a po box with twenty slots is the
+--              same record as a mailbox with one.
+--   notices    things a player has to be told that happened while they were away.
 function zBay_State.ensure()
     if not zBay_State.data then
         zBay_State.data = ModData.getOrCreate(TABLE_NAME)
@@ -37,21 +46,14 @@ function zBay_State.ensure()
     local data = zBay_State.data
 
     data.v = data.v or zBay.SCHEMA_V
-    -- moves whenever the market does. a client holding an older number asks again.
     data.rev = data.rev or 0
     data.nextId = data.nextId or 0
 
     data.balances = data.balances or {}
-    -- id -> listing. ids are strings: a number key comes back from a save as a double, and
-    -- "17" and 17.0 are different keys to everything that looks one up.
     data.listings = data.listings or {}
-    -- username -> list of { t = type, snap = , q = , why = , at = }
     data.mail = data.mail or {}
-    -- username -> { x, y, z }, and the other way round: "x,y,z" -> list of usernames. a
-    -- list, so a po box with twenty slots is the same record as a mailbox with one.
     data.mailboxes = data.mailboxes or {}
     data.boxOwners = data.boxOwners or {}
-    -- things a player has to be told that happened while they were away.
     data.notices = data.notices or {}
     data.ledger = data.ledger or {}
     data.links = data.links or {}
@@ -84,10 +86,6 @@ function zBay_State.newId()
     data.nextId = data.nextId + 1
     return "L" .. string.format("%.0f", data.nextId)
 end
-
--- ----------------------------------------------------------------------------
--- listings
--- ----------------------------------------------------------------------------
 
 local function zBay_index(listing, by)
     zBay_State.count[listing.s] = (zBay_State.count[listing.s] or 0) + by
@@ -149,10 +147,6 @@ function zBay_State.rebuild()
         zBay_State.discordOf[discordId] = username
     end
 end
-
--- ----------------------------------------------------------------------------
--- people
--- ----------------------------------------------------------------------------
 
 -- who is connected, by name. getPlayerFromUsername is the client's lookup and answers nil in
 -- a server process, so the list is walked instead, and kept for a second: an announcement to

@@ -115,9 +115,9 @@ end
 
 -- the one way an item reaches a player. returns how many went into the inventory and how
 -- many went to mail; the two always add up to qty, so nothing is ever dropped between them.
+-- who is online is looked up fresh: this is about to put an item in their hands.
 function zBay_Mailbox.deliver(username, fullType, snap, qty, name, cond)
     local given = 0
-    -- a fresh look at who is online: this is about to put an item in their hands.
     local player = zBay_State.playerOf(username, true)
 
     if player and zBay_Config.data.mailbox.deliverToInventory then
@@ -145,8 +145,8 @@ zBay_Mailbox.TEST_MAIL = {
 
 -- dummy mail, for trying the mailbox out without a second player to buy from. queued and
 -- never handed straight over: collecting is the thing being tried. each line is announced
--- the way real mail is, so the toast and the discord message are tried with it. returns how
--- many items.
+-- the way real mail is, so the toast and the discord message are tried with it. a type this
+-- version of the game has dropped is left out, not an error. returns how many items.
 function zBay_Mailbox.sendTest(username)
     if not username then return 0 end
 
@@ -157,7 +157,6 @@ function zBay_Mailbox.sendTest(username)
         local item = instanceItem(fullType)
         local snap = item and zBay_ItemSnap.capture(item) or nil
 
-        -- a type this version of the game has dropped is left out, not an error.
         if snap then
             local name = item:getDisplayName() or fullType
 
@@ -171,10 +170,6 @@ function zBay_Mailbox.sendTest(username)
 
     return queued
 end
-
--- ----------------------------------------------------------------------------
--- the tile
--- ----------------------------------------------------------------------------
 
 local function zBay_release(data, username)
     local box = data.mailboxes[username]
@@ -202,6 +197,7 @@ end
 
 -- claims the mailbox on a tile. the client drew the menu entry, so none of what it says about
 -- the tile is believed: the sprite, the distance and the owner are all looked up again here.
+-- one owner to a home mailbox; a po box is this same test against a bigger number.
 function zBay_Mailbox.set(player, x, y, z)
     local username = zBay.nameOf(player)
     x, y, z = zBay.int(x), zBay.int(y), zBay.int(z, -32, 32)
@@ -221,7 +217,6 @@ function zBay_Mailbox.set(player, x, y, z)
         if owner == username then return true, "MailboxSet" end
     end
 
-    -- one owner to a home mailbox. a po box is this same test against a bigger number.
     if #owners >= 1 then return false, "Taken" end
 
     zBay_release(data, username)
@@ -238,7 +233,11 @@ function zBay_Mailbox.set(player, x, y, z)
 end
 
 -- hands over what fits. atBox is true when this came from right-clicking the mailbox, false
--- from the window, which only counts when the owner has said a mailbox is not required.
+-- from the window, which only counts when the owner has said a mailbox is not required. an
+-- entry that will not fit does not stop the ones after it: a rifle too heavy to carry says
+-- nothing about the box of nails queued behind it. the list is rebuilt rather than removed
+-- from mid-loop, so it never has a hole in it. how many are still waiting travels in the mail
+-- packet, not the result.
 function zBay_Mailbox.collect(player, atBox)
     local username = zBay.nameOf(player)
     if not username then return false, "Invalid" end
@@ -266,11 +265,8 @@ function zBay_Mailbox.collect(player, atBox)
 
         entry.q = entry.q - got
         given = given + got
-        -- no break on a short one: a rifle that will not fit says nothing about the box of
-        -- nails queued behind it.
     end
 
-    -- rebuilt rather than removed from mid-loop, so the list never has a hole in it.
     local kept = {}
     for _, entry in ipairs(list) do
         if entry.q > 0 then kept[#kept + 1] = entry end
@@ -283,6 +279,5 @@ function zBay_Mailbox.collect(player, atBox)
     local left = zBay_Mailbox.count(username)
     if given == 0 then return false, "NoRoom", left end
 
-    -- how many are still waiting travels in the mail packet sent just above.
     return true, left > 0 and "CollectedSome" or "Collected", given
 end

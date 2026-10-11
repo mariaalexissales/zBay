@@ -17,7 +17,8 @@ function zBay_Money.amount(value)
     return zBay.int(value, 1, zBay_Money.MAX)
 end
 
--- 1250000 -> "1,250,000". built from the right, three at a time.
+-- 1250000 -> "1,250,000". built from the right, three at a time. %.0f and not %d: a total can
+-- pass what %d is promised to hold.
 function zBay_Money.group(value)
     local n = math.floor(tonumber(value) or 0)
     local sign = ""
@@ -27,7 +28,6 @@ function zBay_Money.group(value)
         n = -n
     end
 
-    -- %.0f and not %d: a total can pass what %d is promised to hold.
     local digits = string.format("%.0f", n)
     local out = {}
 

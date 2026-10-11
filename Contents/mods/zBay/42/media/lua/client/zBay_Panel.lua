@@ -50,6 +50,8 @@ function zBay.isWindowOpen(playerNum)
     return zBay.getWindow(playerNum) ~= nil
 end
 
+-- selectedId is what is kept: the row table behind it is replaced by every page that arrives.
+-- the minimum size is where five columns and a strip of controls stop fitting.
 function zBay_Panel:new(x, y, width, height, player)
     local o = ISCollapsableWindow:new(x, y, width, height)
     setmetatable(o, self)
@@ -60,7 +62,6 @@ function zBay_Panel:new(x, y, width, height, player)
     o.title = getText("IGUI_zBay_Title")
     o.view = "browse"
     o.rows = {}
-    -- the id is what is kept: the row table behind it is replaced by every page that arrives.
     o.selected = nil
     o.selectedId = nil
     o.pageNo = 1
@@ -70,7 +71,6 @@ function zBay_Panel:new(x, y, width, height, player)
     o.stripList = {}
     o.labels = {}
     o.resizable = true
-    -- five columns and a strip of controls: the stop comes before either runs out of room.
     o.minimumWidth = 660
     o.minimumHeight = 380
 
@@ -109,10 +109,15 @@ local function zBay_chosen(combo)
     return combo:getOptionData(combo.selected)
 end
 
--- ----------------------------------------------------------------------------
--- building
--- ----------------------------------------------------------------------------
-
+-- the search box calls onTextChange on every keystroke, and the request waits for the typing
+-- to stop. setOnCreateItem goes on after instantiate: createChildren has already run
+-- initializePool once with no callback set and quietly done nothing. the pool calls
+-- initialise on a row for us but not instantiate.
+--
+-- the footer's right-hand buttons hang off the right edge, each to the left of the one
+-- before. refresh is outermost, so it keeps a fixed spot whoever is looking. the admin's
+-- three are down here and not on a tab's strip: none of them is about the tab that happens
+-- to be open.
 function zBay_Panel:createChildren()
     ISCollapsableWindow.createChildren(self)
 
@@ -133,7 +138,6 @@ function zBay_Panel:createChildren()
     end
 
     self.search = zBay_Theme.attach(self, ISTextEntryBox:new("", PAD, bands.filter, 200, FILTER_H))
-    -- the box calls this on every keystroke. the request waits for the typing to stop.
     self.search.onTextChange = function()
         self.searchAt = getTimestampMs() + SEARCH_MS
     end
@@ -148,11 +152,8 @@ function zBay_Panel:createChildren()
     self.list = NIVirtualScrollView:new(listX, listTop, listWidth, listHeight)
     self.list:initialise()
     self.list:instantiate()
-    -- setOnCreateItem after instantiate: createChildren already ran initializePool once with no
-    -- callback set and quietly did nothing.
     self.list:setOnCreateItem(function()
         local row = zBay_Row:new(0, 0, self:rowWidth(), zBay_Row.HEIGHT, self)
-        -- the pool calls initialise for us but not instantiate.
         row:instantiate()
         return row
     end)
@@ -171,7 +172,6 @@ function zBay_Panel:createChildren()
     self.next = zBay_Theme.attach(self,
         zBay_Button:new(PAD + 34, footY, 30, FOOTER_H - 4, ">", self, zBay_Panel.onNext))
 
-    -- hung off the right edge, each to the left of the one before it.
     local function foot(title, onclick, before)
         local button = zBay_Button:new(0, footY, 10, FOOTER_H - 4, getText(title), self, onclick)
         button:sizeToTitle(24)
@@ -181,8 +181,6 @@ function zBay_Panel:createChildren()
 
     self.refreshBtn = foot("IGUI_zBay_Refresh", zBay_Panel.onRefresh, nil)
 
-    -- inside the always-visible one, so refresh keeps a fixed spot whoever is looking. down
-    -- here and not on a tab's strip: none of them is about the tab that happens to be open.
     self.reload = foot("IGUI_zBay_Reload", zBay_Panel.onReload, self.refreshBtn)
     self.restore = foot("IGUI_zBay_Restore", zBay_Panel.onRestore, self.reload)
     self.backup = foot("IGUI_zBay_Backup", zBay_Panel.onBackup, self.restore)
@@ -196,10 +194,6 @@ end
 function zBay_Panel:rowWidth()
     return self.list:getWidth() - 12
 end
-
--- ----------------------------------------------------------------------------
--- the strip: whatever controls the current tab asked for
--- ----------------------------------------------------------------------------
 
 function zBay_Panel:clearStrip()
     for _, entry in ipairs(self.stripList) do self:removeChild(entry.control) end
@@ -290,10 +284,8 @@ function zBay_Panel:onConfirm(button)
     if button.internal == "YES" and onYes then onYes() end
 end
 
--- ----------------------------------------------------------------------------
--- tabs and filters
--- ----------------------------------------------------------------------------
-
+-- before the settings arrive nobody knows what the strip should offer. it is built when they
+-- do: see update.
 function zBay_Panel:setView(key)
     if not zBay_Views.defs[key] then key = "browse" end
 
@@ -305,8 +297,6 @@ function zBay_Panel:setView(key)
     local def = self:def()
 
     self:clearStrip()
-    -- before the settings arrive nobody knows what the strip should offer. it is built
-    -- when they do: see update.
     if S.config and def.strip then def.strip(self) end
     self.builtFor = S.config and S.config.rev or nil
     self.builtAdmin = S.admin
@@ -358,9 +348,9 @@ function zBay_Panel:syncCategories(cats)
     end
 end
 
+-- asks the server for this tab's page. a tab that builds its own rows has nothing to ask for.
 function zBay_Panel:request()
     local def = self:def()
-    -- a tab that builds its own rows has nothing to ask the server for.
     if def.rows then return end
 
     local params = { view = self.view, page = self.pageNo }
@@ -409,10 +399,6 @@ function zBay_Panel:onRestore()
     end)
 end
 
--- ----------------------------------------------------------------------------
--- rows
--- ----------------------------------------------------------------------------
-
 function zBay_Panel:cellsFor(row)
     local def = self:def()
     return def.cells and def.cells(row) or nil
@@ -426,6 +412,11 @@ function zBay_Panel:onRowClick(row)
     if def.picked then def.picked(self, row) end
 end
 
+-- the row table is new even when the listing is the same one, so the selection is found again
+-- by id; gone from the page is gone from the selection. opened from "sell on zBay", the
+-- stack that item is in is picked, and that very item sold. the scroll view only reassigns
+-- data when the visible range moves, so a refresh leaving the row count alone has to be
+-- forced through.
 function zBay_Panel:refresh()
     local def = self:def()
     local rows
@@ -444,12 +435,9 @@ function zBay_Panel:refresh()
 
     self.rows = rows
 
-    -- the row table is new even when the listing is the same one, so the selection is found
-    -- again by id. gone from the page is gone from the selection.
     self.selected = nil
 
     for _, row in ipairs(rows) do
-        -- opened from "sell on zBay": pick the stack that item is in, and sell that very one.
         if self.wantItem and row.ids and row.ids[self.wantItem] then
             row.itemId = self.wantItem
             self.selectedId = row.id
@@ -461,14 +449,8 @@ function zBay_Panel:refresh()
 
     if not self.selected then self.selectedId = nil end
 
-    -- the scroll view only reassigns data when the visible range moves, so a refresh leaving
-    -- the row count alone has to be forced through.
     if self.list then self.list:setDataSource(self.rows, true) end
 end
-
--- ----------------------------------------------------------------------------
--- drawing
--- ----------------------------------------------------------------------------
 
 function zBay_Panel:prerender()
     ISCollapsableWindow.prerender(self)
@@ -489,6 +471,11 @@ function zBay_Panel:prerender()
     for _, button in ipairs(self.adminButtons or {}) do button:setVisible(S.admin) end
 end
 
+-- the balance sits hard right on the tab row: it is the one number every tab needs. column
+-- headers are laid out by the same arithmetic the rows use. over the controls is what is
+-- selected, or failing that whatever the tab has to say. the footer shows the last thing the
+-- server said, for the few seconds it is news, up to the leftmost button showing: an admin
+-- at the narrowest window has no room left for it.
 function zBay_Panel:render()
     ISCollapsableWindow.render(self)
 
@@ -498,11 +485,9 @@ function zBay_Panel:render()
     local def = self:def()
     local dim = zBay_Theme.COL_DIM
 
-    -- the balance, hard right on the tab row. it is the one number every tab needs.
     zBay_Theme.textRight(self, S.money(S.balance), self.width - PAD,
         bands.tab + math.floor((TAB_H - fontH) / 2), zBay_Theme.COL_MONEY, font)
 
-    -- column headers, laid out by the same arithmetic the rows use.
     local cols = zBay_Row.columns(self:rowWidth())
     local left = PAD + 1
     local headY = bands.head + math.floor((HEAD_H - fontH) / 2)
@@ -520,7 +505,6 @@ function zBay_Panel:render()
         zBay_Theme.text(self, text, PAD + 10, bands.list + 10, dim, font)
     end
 
-    -- over the controls: what is selected, or failing that whatever the tab has to say.
     local line = nil
     if self.selected then
         line = def.info and def.info(self, self.selected) or (self.selected.n or "")
@@ -549,10 +533,8 @@ function zBay_Panel:render()
         x = x + getTextManager():MeasureStringX(font, text) + PAD * 2
     end
 
-    -- the last thing the server said, for the few seconds it is news.
     local status = S.status
     if status and getTimestampMs() - status.at < 8000 then
-        -- up to the leftmost button showing. an admin at the narrowest window has none left.
         local room = (S.admin and self.backup:getX() or self.refreshBtn:getX()) - x - PAD
         if room > 0 then
             zBay_Theme.text(self, zBay_Theme.truncate(status.text, room, font), x, footY,
@@ -561,10 +543,10 @@ function zBay_Panel:render()
     end
 end
 
--- ----------------------------------------------------------------------------
--- keeping up
--- ----------------------------------------------------------------------------
-
+-- the strip is rebuilt when the settings arrive or change, or this player's rank does: the
+-- one on screen was built for something else. an answer to anything this player did means
+-- the page is out of date. a page of listings the market has moved under is asked for again,
+-- but not more than once a second however fast it is moving.
 function zBay_Panel:update()
     ISCollapsableWindow.update(self)
 
@@ -573,8 +555,6 @@ function zBay_Panel:update()
     local now = getTimestampMs()
     local def = self:def()
 
-    -- the settings arrived, or changed, or this player's rank did: the strip on screen was
-    -- built for something else.
     local configRev = S.config and S.config.rev or nil
     if configRev ~= self.builtFor or S.admin ~= self.builtAdmin then
         self:setView(self.view)
@@ -587,7 +567,6 @@ function zBay_Panel:update()
         self:request()
     end
 
-    -- something this player did has been answered. whatever it was, the page is out of date.
     if self.results ~= S.results then
         self.results = S.results
         self.scanAt = 0
@@ -602,8 +581,6 @@ function zBay_Panel:update()
         end
     end
 
-    -- the market moved under a page of listings. asked for again, but not more than once a
-    -- second however fast it is moving.
     if def.market then
         local page = S.page(self.view)
         if page and page.rev and page.rev ~= S.rev and now - (self.askedAt or 0) > STALE_MS then
@@ -632,6 +609,8 @@ function zBay_Panel:update()
     self.next:setEnable(paged and self.pageNo < (page and page.pages or 1))
 end
 
+-- setConfig rebuilds the whole widget pool and onResize fires every frame of a drag, so the
+-- list is only reconfigured when its height has actually moved.
 function zBay_Panel:onResize()
     ISCollapsableWindow.onResize(self)
     if not self.list then return end
@@ -642,8 +621,6 @@ function zBay_Panel:onResize()
     self.list:setWidth(listWidth)
     self.list:setHeight(listHeight)
 
-    -- setConfig rebuilds the whole widget pool and onResize fires every frame of a drag, so only
-    -- reconfigure when the height actually moved.
     if self.listHeight ~= listHeight then
         self.listHeight = listHeight
         self.list:setConfig(zBay_Row.HEIGHT, 2)
@@ -661,6 +638,7 @@ function zBay_Panel:onResize()
     for _, button in ipairs(self.adminButtons) do button:setY(footY) end
 end
 
+-- tells the server, which stops announcing the market to somebody who is not looking at it.
 function zBay_Panel:close()
     local data = zBay.players[self.playerNum]
     if data and data.instance == self then
@@ -674,7 +652,6 @@ function zBay_Panel:close()
         self.modal = nil
     end
 
-    -- the server stops announcing the market to somebody who is not looking at it.
     S.close()
 
     ISCollapsableWindow.close(self)
@@ -683,14 +660,17 @@ end
 
 -- view and itemId are both optional: the floor menu opens it where it was left, and "sell on
 -- zBay" opens it on the sell tab with that item picked.
+--
+-- NeatUI is declared in mod.info, but a client that somehow loaded us without it would index
+-- a nil and take the whole ui down, so that is asked first. every open is a hello: it is what
+-- puts this player back on the server's list of people to tell, and what brings anything
+-- they were owed while away.
 function zBay.openPanel(player, view, itemId)
     if not player then return end
 
     local playerNum = player:getPlayerNum()
     if playerNum ~= 0 then return end
 
-    -- NeatUI is declared in mod.info, but a client that somehow loaded us without it would
-    -- index a nil and take the whole ui down.
     if not NIVirtualScrollView then
         zBay.warn("NeatUI Framework is not loaded, so the zBay window cannot open")
         return
@@ -702,8 +682,6 @@ function zBay.openPanel(player, view, itemId)
         zBay.players[playerNum] = data
     end
 
-    -- every open is a hello: it is what puts this player back on the server's list of
-    -- people to tell, and what brings anything they were owed while away.
     S.hello()
 
     local window = data.instance

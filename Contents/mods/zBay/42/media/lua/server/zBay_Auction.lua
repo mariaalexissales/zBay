@@ -84,13 +84,14 @@ local function zBay_escrow(listing, username, amount, code)
     return true
 end
 
+-- the auction a bid or a buyout is for, or nil and why. one that has ended but not been swept
+-- is gone already: the tick settles it for whoever was ahead at the bell.
 local function zBay_open(username, args)
     if not username or type(args) ~= "table" then return nil, "Invalid" end
 
     local listing = zBay_State.listing(args.id)
     if not listing or listing.k ~= "a" then return nil, "Gone" end
     if listing.s == username then return nil, "OwnListing" end
-    -- ended but not swept yet. the tick will settle it for whoever was ahead at the bell.
     if listing.e <= zBay.now() then return nil, "Gone" end
 
     return listing
@@ -109,6 +110,10 @@ function zBay_Auction.buyout(username, args)
     return true, "BoughtOut", listing.q, listing.bo
 end
 
+-- offering the buyout price or more is buying it out: nobody should pay over the odds for a
+-- lot that had a price on it. a bid in the last moments buys everybody else that long to
+-- answer it. the end only ever moves later, so the mark the tick waits on is still at or
+-- before it.
 function zBay_Auction.bid(username, args)
     local listing, reason = zBay_open(username, args)
     if not listing then return false, reason end
@@ -120,8 +125,6 @@ function zBay_Auction.bid(username, args)
     local least = zBay_Rules.minBid(listing, config)
     if amount < least then return false, "BidLow", nil, least end
 
-    -- offering the buyout price or more is buying it out. nobody should pay over the odds
-    -- for a lot that had a price on it.
     if listing.bo and amount >= listing.bo then return zBay_Auction.buyout(username, args) end
 
     local ok, need = zBay_escrow(listing, username, amount, "Bid")
@@ -131,8 +134,6 @@ function zBay_Auction.bid(username, args)
     listing.bd = username
     listing.nb = (listing.nb or 0) + 1
 
-    -- a bid in the last moments buys everybody else that long to answer it. the end only
-    -- ever moves later, so the mark the tick waits on is still at or before it.
     local now = zBay.now()
     local grace = config.antiSnipeMinutes * MINUTE_MS
     if grace > 0 and listing.e - now < grace then listing.e = now + grace end
@@ -149,7 +150,10 @@ end
 
 -- one number compared against the clock, and nothing else, until something is actually due.
 -- then the table is walked once: what has ended is closed, and the earliest of the rest
--- becomes the next mark.
+-- becomes the next mark. the ended are collected first, since closing a listing removes it
+-- from the table being walked. past SETTLE_CAP the rest are still owed and due at once, so
+-- the next pass picks up where this one stopped. each is closed behind a pcall: one bad
+-- listing should cost itself, not every auction queued behind it.
 function zBay_Auction.tick()
     local due = zBay_State.nextDue
     if not due then return end
@@ -160,13 +164,11 @@ function zBay_Auction.tick()
     local ended = {}
     local nextDue = nil
 
-    -- collected first: closing a listing removes it from the table being walked.
     for _, listing in pairs(zBay_State.ensure().listings) do
         if listing.e <= now then
             if #ended < SETTLE_CAP then
                 ended[#ended + 1] = listing
             else
-                -- still owed. due now, so the next pass picks up where this one stopped.
                 nextDue = now
             end
         elseif not nextDue or listing.e < nextDue then
@@ -177,7 +179,6 @@ function zBay_Auction.tick()
     zBay_State.nextDue = nextDue
 
     for _, listing in ipairs(ended) do
-        -- one bad listing should cost itself, not every auction queued behind it.
         local ok, err = pcall(function()
             if listing.k == "a" then
                 zBay_Auction.settle(listing)

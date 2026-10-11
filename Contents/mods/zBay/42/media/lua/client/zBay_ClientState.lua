@@ -82,10 +82,6 @@ function S.sprites()
     return S.spriteSet
 end
 
--- ----------------------------------------------------------------------------
--- what the server says
--- ----------------------------------------------------------------------------
-
 local handlers = {}
 
 function handlers.config(args)
@@ -102,6 +98,8 @@ function handlers.config(args)
     zBay_touch()
 end
 
+-- a page is as fresh as the market was when it was cut, so being handed one newer than the
+-- last announcement is an announcement.
 function handlers.page(args)
     if not args or not args.view then return end
 
@@ -109,8 +107,6 @@ function handlers.page(args)
     args.at = getTimestampMs()
     S.pages[args.view] = args
 
-    -- a page is as fresh as the market was when it was cut. being handed one newer than the
-    -- last announcement is an announcement.
     if args.rev and args.rev > S.rev then S.rev = args.rev end
 
     zBay_touch()
@@ -155,10 +151,6 @@ function S.onCommand(module, command, args)
     local ok, err = pcall(handler, args)
     if not ok then zBay.warn("client command " .. tostring(command) .. " failed: " .. tostring(err)) end
 end
-
--- ----------------------------------------------------------------------------
--- asking
--- ----------------------------------------------------------------------------
 
 -- matches the server's floor on page, with a little over. a request sent inside it is
 -- dropped there without an answer, so it is held here instead and the newest one wins.

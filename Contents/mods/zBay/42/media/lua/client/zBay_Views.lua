@@ -59,10 +59,6 @@ local function zBay_selectedLine(row)
     return line
 end
 
--- ----------------------------------------------------------------------------
--- browse: fixed-price listings
--- ----------------------------------------------------------------------------
-
 defs.browse = {
     title = "IGUI_zBay_Tab_Browse",
     market = true,
@@ -99,10 +95,6 @@ defs.browse = {
     end,
 }
 
--- ----------------------------------------------------------------------------
--- auctions
--- ----------------------------------------------------------------------------
-
 defs.auctions = {
     title = "IGUI_zBay_Tab_Auctions",
     market = true,
@@ -115,6 +107,7 @@ defs.auctions = {
         return not S.config or S.config.auction.enabled
     end,
 
+    -- the tint: blue is yours to sell, green is yours to lose.
     cells = function(row)
         local price = S.money(row.b or row.sb)
         if (row.nb or 0) > 0 then price = price .. " (" .. row.nb .. ")" end
@@ -122,7 +115,6 @@ defs.auctions = {
         return {
             name = zBay_name(row), qty = row.q, price = price, ends = zBay_ends("auctions", row),
             who = row.s,
-            -- blue is yours to sell, green is yours to lose.
             tint = (row.top and zBay_Theme.COL_GOOD) or (row.mine and zBay_Theme.COL_ME) or nil,
         }
     end,
@@ -162,13 +154,10 @@ defs.auctions = {
     end,
 }
 
--- ----------------------------------------------------------------------------
--- sell: what is in the player's own pockets
--- ----------------------------------------------------------------------------
-
 -- everything the player is carrying that could go on the market, stacked by what looks the
 -- same. the stacking is a guess for the list's sake; the server does the real comparison
--- when one is put up.
+-- when one is put up. a bag is looked into before the bag itself is judged: a full bag
+-- cannot be sold, but everything in it can.
 function zBay_Views.scan(player)
     local groups, order = {}, {}
 
@@ -181,8 +170,6 @@ function zBay_Views.scan(player)
         for i = 0, items:size() - 1 do
             local item = items:get(i)
 
-            -- into the bag before the bag itself is judged: a full bag cannot be sold, but
-            -- everything in it can.
             if depth < 3 and instanceof(item, "InventoryContainer") then
                 local inner = item:getInventory()
                 if inner and inner:getItems():size() > 0 then walk(inner, depth + 1) end
@@ -281,10 +268,6 @@ defs.sell = {
     end,
 }
 
--- ----------------------------------------------------------------------------
--- my listings
--- ----------------------------------------------------------------------------
-
 defs.mine = {
     title = "IGUI_zBay_Tab_Mine",
     market = true,
@@ -316,10 +299,6 @@ defs.mine = {
     end,
 }
 
--- ----------------------------------------------------------------------------
--- mailbox
--- ----------------------------------------------------------------------------
-
 defs.mail = {
     title = "IGUI_zBay_Tab_Mail",
     head = { name = "IGUI_zBay_Col_Item", qty = "IGUI_zBay_Col_Qty" },
@@ -330,9 +309,9 @@ defs.mail = {
         return { name = zBay_name(row), qty = row.q }
     end,
 
+    -- a collect button only where the owner has said a mailbox is not needed. otherwise the
+    -- mail is collected at the mailbox, from its right-click menu.
     strip = function(panel)
-        -- only where the owner has said a mailbox is not needed. otherwise the mail is
-        -- collected at the mailbox, from its right-click menu.
         if S.config and not S.config.mailbox.required then
             panel:addButton("collect", "IGUI_zBay_Collect", function()
                 S.send("mailCollect", { atBox = false })
@@ -346,10 +325,6 @@ defs.mail = {
         return getText("IGUI_zBay_Hint_MailNone")
     end,
 }
-
--- ----------------------------------------------------------------------------
--- bank
--- ----------------------------------------------------------------------------
 
 -- "2026-10-10 14:03:22 UTC" down to "10-10 14:03". the year and the seconds are not what
 -- anybody reads a statement for.

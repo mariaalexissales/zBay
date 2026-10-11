@@ -27,13 +27,13 @@ local function zBay_dispatchLocal(command, args)
 end
 
 -- with no remote server the send is a direct call into the handler that would have received
--- it, so singleplayer runs the same market code the server does.
+-- it, so singleplayer runs the same market code the server does. on a multiplayer client the
+-- player is nil this early, and handing nil to sendClientCommand loses the packet without a
+-- word: it is said, and the caller retries.
 function zBay_Net.toServer(command, args)
     args = args or {}
 
     if zBay.hasRemoteServer() then
-        -- nil this early on a multiplayer client, and handing nil to sendClientCommand loses
-        -- the packet without a word. say so, and let the caller retry.
         local player = getPlayer()
         if not player then
             zBay.warn("no local player yet, dropped " .. tostring(command))

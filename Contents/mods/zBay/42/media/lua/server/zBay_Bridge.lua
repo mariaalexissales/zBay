@@ -62,10 +62,6 @@ local function zBay_enabled()
     return zBay_Bridge.ready and zBay_Config.discord.enabled
 end
 
--- ----------------------------------------------------------------------------
--- out
--- ----------------------------------------------------------------------------
-
 local function zBay_currency()
     local currency = zBay_Config.data.currency
     return { name = currency.name, symbol = currency.symbol }
@@ -73,11 +69,12 @@ end
 
 -- held in memory until the next pump, so a burst of bids is one write and not one each.
 -- what is lost if the server dies in that second is a few announcements, never money.
+--
+-- the first record of every boot is a hello, whatever was about to be first. it says which
+-- world this is and what the money is called, so nothing after it is announced as a bare
+-- number. sent from here and not at boot: a bridge switched on by a reload an hour in still
+-- has to open with it.
 local function zBay_queue(kind, payload)
-    -- the first record of every boot, whatever was about to be first. it says which world
-    -- this is and what the money is called, so nothing after it is announced as a bare
-    -- number. sent here and not at boot: a bridge switched on by a reload an hour in still
-    -- has to open with it.
     if not saidHello then
         saidHello = true
         zBay_queue("hello", { boot = boot, world = zBay_Files.world(), v = zBay.SCHEMA_V, currency = zBay_currency() })
@@ -119,14 +116,14 @@ function zBay_Bridge.notice(username, code, item, amount)
     zBay_queue("notice", { user = username, discordId = discordId, code = code, item = item, amount = amount })
 end
 
+-- the queue is emptied whether or not the write lands. a folder that cannot be written is not
+-- going to be writable in a second, and a queue that only grows is a leak with a reason.
 local function zBay_flush()
     if #queue == 0 or not outFile then return end
 
     local lines = {}
     for _, record in ipairs(queue) do lines[#lines + 1] = zBay_Json.line(record) end
 
-    -- emptied either way. a folder that cannot be written is not going to be writable in a
-    -- second, and a queue that only grows is a leak with a reason.
     queue = {}
 
     if not zBay_Files.append(outFile, table.concat(lines, "\n") .. "\n") then
@@ -168,14 +165,12 @@ local function zBay_snapshot()
     if zBay_Files.write(SNAPSHOT_FILE, text) then snapshotRev = data.rev end
 end
 
--- ----------------------------------------------------------------------------
--- in
--- ----------------------------------------------------------------------------
-
 local inbound = {}
 
 -- discord: "/zbay link". the bot made up a code and told the player; this is the game being
 -- told the same code, so it can recognise it when the player types it into the bank tab.
+-- codes that have run out are swept here, where they are made, rather than on a clock of
+-- their own.
 function inbound.link_offer(command)
     if type(command.code) ~= "string" or type(command.discordId) ~= "string" then return end
 
@@ -183,7 +178,6 @@ function inbound.link_offer(command)
     local now = zBay.now()
     local count = 0
 
-    -- swept here, where they are made, rather than on a clock of their own.
     for code, pending in pairs(data.pendingLinks) do
         if (pending.e or 0) <= now then
             data.pendingLinks[code] = nil
@@ -226,8 +220,9 @@ end
 -- how many lines of mail one answer carries. the counts beside them are the real ones.
 local MAIL_LINES = 25
 
--- discord: "/zbay mailbox". what is waiting, by name and number. nothing is handed over
--- from there: collecting is still done in game.
+-- discord: "/zbay mailbox". what is waiting, by name and number, whether there is a mailbox
+-- to collect at and whether one is needed. nothing is handed over from there: collecting is
+-- still done in game.
 function inbound.mailbox_query(command)
     local username = zBay_State.discordOf[command.discordId]
     local reply = { replyTo = command.replyTo, ok = username ~= nil, user = username }
@@ -243,7 +238,6 @@ function inbound.mailbox_query(command)
         reply.items = items
         reply.lines = #rows
         reply.total = zBay_Mailbox.count(username)
-        -- whether there is a mailbox to collect at, and whether one is needed.
         reply.claimed = zBay_State.ensure().mailboxes[username] ~= nil
         reply.required = zBay_Config.data.mailbox.required == true
     end
@@ -252,8 +246,11 @@ function inbound.mailbox_query(command)
 end
 
 -- reads in.log from the top and acts on every command newer than the last one acted on.
--- the file is somebody else's and may be mid-write: a last line that will not parse is
--- left for next time, and nothing after a bad line is skipped past.
+-- the file is somebody else's and may be mid-write: a last line that will not parse is a
+-- write in progress and is met whole on the next poll. a bad line anywhere else is a bad
+-- record, there on every poll until the relay clears the file, so it is said once and stepped
+-- over. a relay that was reinstalled counts again from one and says so with a new epoch; the
+-- game starts listening from the top with it.
 function zBay_Bridge.poll()
     local _, _, lines = zBay_Files.read(IN_FILE)
     if not lines then return end
@@ -267,19 +264,13 @@ function zBay_Bridge.poll()
             local seq = type(command) == "table" and zBay.int(command.seq, 1) or nil
 
             if not seq then
-                -- the last line unreadable is a write in progress. stop, and meet it whole
-                -- on the next poll.
                 if index == #lines then break end
 
-                -- anywhere else it is a bad record, and it will still be there on every
-                -- poll until the relay clears the file. said once, not every five seconds.
                 if not warnedUnreadable then
                     warnedUnreadable = true
                     zBay.warn("skipping an unreadable line in " .. zBay_Files.shown(IN_FILE))
                 end
             else
-                -- a relay that was reinstalled starts counting again from one. it says so
-                -- with a new epoch, and the game starts listening from the top with it.
                 if command.epoch ~= nil and command.epoch ~= bridge.inEpoch then
                     bridge.inEpoch = command.epoch
                     bridge.inSeq = 0
@@ -304,12 +295,9 @@ function zBay_Bridge.poll()
     end
 end
 
--- ----------------------------------------------------------------------------
--- linking
--- ----------------------------------------------------------------------------
-
 -- the player typing the code discord gave them. that the code exists proves somebody ran
--- the command there; that it arrived in this packet proves who is typing here.
+-- the command there; that it arrived in this packet proves who is typing here. one each way:
+-- a discord account moving to a new character lets go of the old one.
 function zBay_Bridge.link(username, code)
     if not username then return false, "Invalid" end
     if not zBay_enabled() then return false, "NoDiscord" end
@@ -326,7 +314,6 @@ function zBay_Bridge.link(username, code)
 
     data.pendingLinks[key] = nil
 
-    -- one each way: a discord account moving to a new character lets go of the old one.
     local previous = zBay_State.discordOf[pending.d]
     if previous then data.links[previous] = nil end
 
@@ -341,24 +328,20 @@ function zBay_Bridge.link(username, code)
     return true, "Linked"
 end
 
--- ----------------------------------------------------------------------------
--- the pump
--- ----------------------------------------------------------------------------
-
 -- called once a second by the server's clock. now is true when something outside asked for
--- the inbox to be read straight away: see zBay_BridgePoke.
+-- the inbox to be read straight away: see zBay_BridgePoke. a bridge switched off mid-session
+-- drops what was queued, which is owed to nobody. a server nobody is trading on still says
+-- which world it is.
 function zBay_Bridge.pump(now)
     if not zBay_Bridge.ready then return end
 
     local config = zBay_Config.discord
 
     if not config.enabled then
-        -- switched off mid-session. nothing queued before that is owed to anybody.
         if #queue > 0 then queue = {} end
         return
     end
 
-    -- a server nobody is trading on still says which world it is.
     if not saidHello then
         saidHello = true
         zBay_queue("hello", { boot = boot, world = zBay_Files.world(), v = zBay.SCHEMA_V, currency = zBay_currency() })
@@ -379,14 +362,14 @@ function zBay_Bridge.pump(now)
     end
 end
 
+-- a new out file each boot, named for the second it started: two boots in one second is not a
+-- server. a new file means a new hello, the first time there is anything to write.
 Events.OnInitGlobalModData.Add(function()
     zBay_State.ensure()
 
-    -- seconds are plenty: two boots in one second is not a server.
     boot = math.floor(zBay.now() / 1000)
     outFile = DIR .. "out_" .. string.format("%.0f", boot) .. ".log"
 
-    -- a new file, so a new hello, the first time there is anything to write.
     saidHello = false
     zBay_Bridge.ready = true
 end)

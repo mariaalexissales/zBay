@@ -71,10 +71,6 @@ local function zBay_sendConfig(player, username)
     })
 end
 
--- ----------------------------------------------------------------------------
--- reading
--- ----------------------------------------------------------------------------
-
 -- sent on the way into the world and again whenever the window opens. it does not make a
 -- player a watcher: asking for a page of listings does that, and closing the window ends it,
 -- so somebody who never opens the market is never sent a word about it.
@@ -113,10 +109,6 @@ function zBay_Commands.handlers.page(player, args)
     zBay_Net.toClient(player, "page", reply)
 end
 
--- ----------------------------------------------------------------------------
--- the market
--- ----------------------------------------------------------------------------
-
 function zBay_Commands.handlers.sell(player, args)
     zBay_reply(player, zBay_Market.sell(player, args))
 end
@@ -137,12 +129,8 @@ function zBay_Commands.handlers.cancel(player, args)
     zBay_reply(player, zBay_Market.cancel(zBay.nameOf(player), args, false))
 end
 
--- ----------------------------------------------------------------------------
--- the bank and the mailbox
--- ----------------------------------------------------------------------------
-
+-- no amount is "everything on me".
 function zBay_Commands.handlers.deposit(player, args)
-    -- no amount is "everything on me".
     local amount = type(args) == "table" and args.amount ~= nil and zBay_Money.amount(args.amount) or nil
     if type(args) == "table" and args.amount ~= nil and not amount then
         zBay_reply(player, false, "Invalid")
@@ -158,6 +146,8 @@ function zBay_Commands.handlers.deposit(player, args)
     end
 end
 
+-- a short payout is still a success: the cap, the weight or the smallest note stopped it, and
+-- the rest never left the bank.
 function zBay_Commands.handlers.withdraw(player, args)
     local amount = type(args) == "table" and zBay_Money.amount(args.amount) or nil
     if not amount then
@@ -170,7 +160,6 @@ function zBay_Commands.handlers.withdraw(player, args)
     if paid >= amount then
         zBay_reply(player, true, "Withdrew", nil, paid)
     elseif paid > 0 then
-        -- the cap, the weight or the smallest note stopped it short. the rest never left.
         zBay_reply(player, true, "WithdrewSome", nil, paid)
     else
         zBay_reply(player, false, "NoWithdraw")
@@ -192,10 +181,6 @@ function zBay_Commands.handlers.link(player, args)
     zBay_reply(player, zBay_Bridge.link(zBay.nameOf(player), code))
 end
 
--- ----------------------------------------------------------------------------
--- admins
--- ----------------------------------------------------------------------------
-
 -- every one of these is a button only admins are drawn, and the client draws the button.
 local function zBay_adminOnly(player, what)
     if zBay.isAdmin(player) then return true end
@@ -205,16 +190,16 @@ local function zBay_adminOnly(player, what)
     return false
 end
 
+-- discord prints prices too, so it hears the currency changed. everybody with the window open
+-- gets the new settings, not just whoever pressed it: a price shown in the old currency is a
+-- wrong price.
 function zBay_Commands.handlers.adminReload(player, args)
     if not zBay_adminOnly(player, "reload the settings") then return end
 
     local ok, notes = zBay_Config.load()
 
-    -- discord prints prices too, and has to hear the currency changed.
     if ok then zBay_Bridge.announceConfig() end
 
-    -- everybody with the window open gets the new settings, not just whoever pressed it:
-    -- a price shown in the old currency is a wrong price.
     for username in pairs(watchers) do
         local watcher = zBay_State.playerOf(username)
         if watcher then zBay_sendConfig(watcher, username) end
@@ -250,10 +235,6 @@ function zBay_Commands.handlers.adminTestMail(player, args)
     local queued = zBay_Mailbox.sendTest(zBay.nameOf(player))
     zBay_reply(player, queued > 0, queued > 0 and "TestMail" or "Failed", queued)
 end
-
--- ----------------------------------------------------------------------------
--- the wire and the clock
--- ----------------------------------------------------------------------------
 
 local function zBay_sweep(now)
     if now - lastSweep < SWEEP_MS then return end
@@ -301,6 +282,9 @@ local function zBay_pump()
     zBay_sweep(now)
 end
 
+-- a command inside its floor is dropped without a word. the client paces itself to the same
+-- floors, so a packet that lands inside one is a double-click or somebody who is not using the
+-- window.
 local function zBay_onClientCommand(module, command, player, args)
     if module ~= zBay.MODULE then return end
 
@@ -310,8 +294,6 @@ local function zBay_onClientCommand(module, command, player, args)
     local username = zBay.nameOf(player)
     if not username then return end
 
-    -- dropped without a word. the client paces itself to the same floors, so a packet that
-    -- lands inside one is a double-click or somebody who is not using the window.
     if not zBay_allowed(username, command, getTimestampMs()) then return end
 
     local ok, err = pcall(handler, player, args)

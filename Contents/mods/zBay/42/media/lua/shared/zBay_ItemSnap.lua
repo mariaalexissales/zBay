@@ -40,14 +40,14 @@ local function zBay_getter(object, name)
     return object["get" .. name] or object["is" .. name]
 end
 
+-- every named field the object can both read and write. both halves or neither: a value that
+-- can be read and not put back is one verify() would hold against the item for ever.
 local function zBay_readFields(object, names)
     local out = {}
 
     for _, name in ipairs(names) do
         local get = zBay_getter(object, name)
 
-        -- both halves or neither: a value that can be read and not put back is one the
-        -- comparison in verify() would then hold against the item for ever.
         if get and object["set" .. name] then
             local value = get(object)
             local kind = type(value)
@@ -63,6 +63,8 @@ local function zBay_readFields(object, names)
     return out
 end
 
+-- puts back only what differs. several setters do more than set, and one called with the
+-- value already there is a side effect for nothing.
 local function zBay_writeFields(object, values, names)
     if not values then return end
 
@@ -73,8 +75,6 @@ local function zBay_writeFields(object, values, names)
             local get = zBay_getter(object, name)
             local set = object["set" .. name]
 
-            -- only what differs. several setters do more than set, and one called with the
-            -- value already there is a side effect for nothing.
             if set and (not get or get(object) ~= value) then set(object, value) end
         end
     end
@@ -144,16 +144,16 @@ local function zBay_captureFluids(item, snap)
     return true
 end
 
+-- a fresh bottle arrives full of whatever its script says, so it is emptied first. addFluid
+-- respects a sealed container, and this is putting back what was there rather than a player
+-- pouring: unlocked for the fill, then set to what it was.
 local function zBay_restoreFluids(item, fluids)
     local container = item.getFluidContainer and item:getFluidContainer()
     if not container then return false end
 
-    -- a fresh bottle arrives full of whatever its script says.
     container:Empty()
     container:setCapacity(fluids.cap)
 
-    -- addFluid respects a sealed container, and this is putting back what was there rather
-    -- than a player pouring. unlocked for the fill, then set to what it was.
     container:setInputLocked(false)
     container:setCanPlayerEmpty(true)
 
@@ -170,6 +170,9 @@ end
 
 -- clothing keeps its look in a visual rather than on the item: which texture it rolled, its
 -- tint, and blood, dirt and holes per body part. without this a red shirt sells as a blue one.
+-- a sewn-on patch is refused, not flattened: it carries the tailoring level it was made at and
+-- the engine gives lua no way to put one back. body parts are kept under a name, and only the
+-- ones with something on them, because a list with gaps does not survive being saved.
 local function zBay_captureVisual(item, snap)
     local visual = item.getVisual and item:getVisual()
     if not visual then return true end
@@ -187,15 +190,11 @@ local function zBay_captureVisual(item, snap)
     for i = 0, BloodBodyPartType.MAX:index() - 1 do
         local part = BloodBodyPartType.FromIndex(i)
 
-        -- a sewn-on patch carries the tailoring level it was made at, and the engine gives
-        -- lua no way to put one back as it was. refused, not flattened.
         if item.getPatchType and item:getPatchType(part) then return false, "Patched" end
 
         local blood, dirt = visual:getBlood(part), visual:getDirt(part)
         local hole = visual:getHole(part)
 
-        -- only the parts with something on them, under a name: a list with gaps in it does
-        -- not survive being saved.
         if blood > 0 or dirt > 0 or hole > 0 then
             out.body["p" .. i] = { blood, dirt, hole }
         end
@@ -205,6 +204,8 @@ local function zBay_captureVisual(item, snap)
     return true
 end
 
+-- the decal is set even when there was none: a fresh shirt can roll a print of its own, and
+-- "no print" is as much a thing to put back as any other.
 local function zBay_restoreVisual(item, saved)
     local visual = item.getVisual and item:getVisual()
     if not visual then return false end
@@ -214,8 +215,6 @@ local function zBay_restoreVisual(item, saved)
     if saved.tint then
         visual:setTint(ImmutableColor.new(saved.tint[1], saved.tint[2], saved.tint[3], saved.tint[4]))
     end
-    -- set even when there was none: a fresh shirt can roll a print of its own, and "no
-    -- print" is as much a thing to put back as any other.
     visual:setDecal(saved.decal)
 
     for i = 0, BloodBodyPartType.MAX:index() - 1 do
@@ -230,6 +229,9 @@ local function zBay_restoreVisual(item, saved)
     return true
 end
 
+-- one item as a table, weapon parts and all, or nil and why. a recorded media index of -1 is a
+-- blank tape and is left out. mod data past the copy budget refuses the item: half of
+-- somebody's mod data is worse than none of it.
 local function zBay_capture(item, depth)
     if depth > 3 then return nil, "Unsupported" end
 
@@ -238,7 +240,6 @@ local function zBay_capture(item, depth)
     if item.isCustomName and item:isCustomName() then snap.name = item:getName() end
     if item.isCustomWeight and item:isCustomWeight() then snap.weight = item:getActualWeight() end
 
-    -- which tape or disc this is. -1 is a blank one.
     if item.getRecordedMediaIndex then
         local media = item:getRecordedMediaIndex()
         if type(media) == "number" and media >= 0 then snap.media = media end
@@ -270,7 +271,6 @@ local function zBay_capture(item, depth)
         local budget = { n = 0 }
         local data = zBay_copy(item:getModData(), 0, budget)
 
-        -- half of somebody's mod data is worse than none of it.
         if budget.over then return nil, "Unsupported" end
         if data and not table.isempty(data) then snap.md = data end
     end
@@ -278,6 +278,8 @@ local function zBay_capture(item, depth)
     return snap
 end
 
+-- makes item match snap. false when a part or a fluid it names no longer exists. the condition
+-- is put back again after the visual, because a hole takes condition with it.
 local function zBay_restore(item, snap)
     if snap.parts then
         if item.clearAllWeaponParts then item:clearAllWeaponParts() end
@@ -314,7 +316,6 @@ local function zBay_restore(item, snap)
     if snap.vis then
         if not zBay_restoreVisual(item, snap.vis) then return false end
 
-        -- a hole takes condition with it, so the figure is put back after the holes are.
         local condition = snap.f and snap.f.Condition
         if condition and item:getCondition() ~= condition then item:setCondition(condition) end
     end
@@ -382,12 +383,12 @@ function zBay_ItemSnap.same(a, b)
 end
 
 -- why this item cannot go on the market, as the tail of a translation key, or nil when it
--- can. cheap, and asked by the client too, to keep such things out of the sell list.
+-- can. cheap, and asked by the client too, to keep such things out of the sell list. on a belt
+-- or a back counts as equipped: selling it would leave the slot holding something that is gone.
 function zBay_ItemSnap.refusal(item)
     if not item then return "Unknown" end
 
     if item:isEquipped() then return "Equipped" end
-    -- on a belt or a back. selling it would leave the slot holding something that is gone.
     if item.getAttachedSlot and item:getAttachedSlot() > -1 then return "Equipped" end
     if item:isFavorite() then return "Favourite" end
 

@@ -40,6 +40,10 @@ end
 -- where the cell goes, and whether what it hangs off is out. it is one more cell on the end
 -- of the map button's flyout, or beside the map button itself in a sandbox without the
 -- minimap, where that button has no flyout.
+--
+-- Quest System Framework puts a cell of its own in that same place. ours goes after it,
+-- whichever of the two loaded first, and stays out while the cursor is on theirs: that is
+-- the way across to ours.
 local function zBay_host(panel, textureWidth)
     local x, y, out
     local flyout = panel.mapPopup
@@ -53,9 +57,6 @@ local function zBay_host(panel, textureWidth)
         out = button:isMouseOver()
     end
 
-    -- Quest System Framework puts a cell of its own in that same place. ours goes after it,
-    -- whichever of the two loaded first, and stays out while the cursor is on theirs: that
-    -- is the way across to ours.
     local quests = panel.QSF_popup
     if quests then
         x = x + quests:getWidth()
@@ -111,11 +112,12 @@ function zBay_Popup:drawCoins(lit)
     end
 end
 
+-- a missing texture costs us the art, not the whole sidebar render pass: the stand-in is
+-- drawn in its place.
 function zBay_Popup:render()
     local open = zBay.isWindowOpen(self.playerNum)
     local texture = open and (self.iconOn or self.iconOff) or self.iconOff
 
-    -- a missing texture should cost us the art, not the whole sidebar render pass.
     if texture then
         self:drawTexture(texture, 0, 0, 1, 1, 1, 1)
         return
@@ -166,13 +168,14 @@ function zBay_Popup:hideTooltip()
 end
 
 -- makes the cell if there is none and puts it in its place. true when it should be out.
+--
+-- a sandbox with the map switched off has no map button to hang off. nothing is put in its
+-- place: the right-click on the floor is still there, and a sidebar button of our own would
+-- fight any other mod's for the bottom of the column.
 local function zBay_ensureIcon(panel)
     if not panel or not panel.chr or panel.chr:getPlayerNum() ~= 0 then return false end
     if not zBay_isCurrentPanel(panel) then return false end
 
-    -- a sandbox with the map switched off has no map button to hang off. nothing is put in
-    -- its place: the right-click on the floor is still there, and a sidebar button of our own
-    -- would fight any other mod's for the bottom of the column.
     if not panel.mapBtn then return false end
 
     local textureWidth = zBay_textureWidth()
@@ -195,12 +198,13 @@ local function zBay_ensureIcon(panel)
     return hostOut
 end
 
+-- out while its host is, or while the cursor is on it. never in the tutorial, whose sidebar
+-- is not the player's to poke at.
 local function zBay_updateVisibility(panel, hostOut)
     if not panel or not panel.zBay_popup then return end
 
     local show = hostOut or panel.zBay_popup:isMouseOver()
 
-    -- the tutorial's sidebar is not the player's to poke at.
     if "Tutorial" == getCore():getGameMode() then
         show = false
     end
@@ -214,6 +218,8 @@ local function zBay_updateVisibility(panel, hostOut)
     end
 end
 
+-- wraps the four sidebar methods the cell lives off. vanilla's own runs first in each, so a
+-- fault in here costs us our cell rather than the player's whole sidebar.
 local function zBay_patchSidebar()
     if not ISEquippedItem then
         require "ISUI/ISEquippedItem"
@@ -231,8 +237,6 @@ local function zBay_patchSidebar()
         zBay_ensureIcon(self)
     end
 
-    -- vanilla runs first, so a fault in here costs us our cell rather than the player's whole
-    -- sidebar.
     function ISEquippedItem:prerender()
         if originalPrerender then originalPrerender(self) end
         if not zBay_isCurrentPanel(self) then return end

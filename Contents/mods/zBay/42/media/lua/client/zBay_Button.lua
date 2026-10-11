@@ -7,6 +7,7 @@ require "zBay_Theme"
 
 zBay_Button = ISButton:derive("zBay_Button")
 
+-- displayBackground is off: the vanilla rect-and-border chrome would sit under the NeatUI art.
 function zBay_Button:new(x, y, width, height, title, target, onclick)
     local o = ISButton:new(x, y, width, height, title, target, onclick)
     setmetatable(o, self)
@@ -15,7 +16,6 @@ function zBay_Button:new(x, y, width, height, title, target, onclick)
     o.font = UIFont.Small
     o.selected = false
 
-    -- the vanilla rect-and-border chrome would sit under the NeatUI art.
     o.displayBackground = false
 
     return o

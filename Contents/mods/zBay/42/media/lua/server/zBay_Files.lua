@@ -30,9 +30,9 @@ function zBay_Files.shown(name)
 end
 
 -- the text, or nil and why. a missing file is either a nil reader or one whose first line is
--- nil, build depending, so both come back the same way.
+-- nil, build depending, so both come back the same way. opened with create off, or a missing
+-- file would be made empty instead of coming back nil.
 function zBay_Files.read(name)
-    -- false, so a missing file comes back nil instead of being created empty.
     local ok, reader = pcall(function() return getFileReader(zBay_Files.path(name), false) end)
     if not ok or not reader then return nil, "could not open" end
 
