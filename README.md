@@ -2,7 +2,9 @@
 
 A marketplace for Project Zomboid multiplayer servers (Build 42.20+): fixed-price listings, auctions, a bank, mail for what you can't carry, and a Discord bridge. Requires [NeatUI Framework](https://steamcommunity.com/sharedfiles/filedetails/?id=3508537032).
 
-Players right-click the ground and choose **Open zBay**.
+Players right-click the ground and choose **Open zBay**, or hover the map icon on the left sidebar and click the zBay cell that flies out with it. With the map switched off in the sandbox there is no map icon, and the right-click is the way in.
+
+The cell draws a pile of coins until there is art for it. It uses `media/ui/Sidebar/<size>/zBay_Off_<size>.png` and `zBay_On_<size>.png` when they exist, for each sidebar size: 48, 64, 80, 96 and 128.
 
 ## Settings
 
@@ -67,7 +69,7 @@ If nothing in `currency.items` is worth 1, amounts that aren't a multiple of the
 
 ### Backup
 
-With `backup.enabled`, every balance, listing and mailbox is also written to `Zomboid/Lua/zBay/backup_<world>.json` every `backup.minutes` while anything has changed, with the one before it kept as `backup_<world>_prev.json`. It runs off the server's own clock: a dedicated server never fires the game's save event, so there's nothing else to hang it on. Singleplayer and hosted games write it on each save as well. Nothing reads it back on its own. An admin presses **Restore Backup** on the Bank tab when they've decided the file is the one to keep, which is after a server was killed instead of shut down, or after a rollback.
+With `backup.enabled`, every balance, listing and mailbox is also written to `Zomboid/Lua/zBay/backup_<world>.json` every `backup.minutes` while anything has changed, with the one before it kept as `backup_<world>_prev.json`. It runs off the server's own clock: a dedicated server never fires the game's save event, so there's nothing else to hang it on. Singleplayer and hosted games write it on each save as well. Nothing reads it back on its own. An admin presses **Restore Backup** at the bottom of the window when they've decided the file is the one to keep, which is after a server was killed instead of shut down, or after a rollback.
 
 ## Discord bridge
 
@@ -97,7 +99,9 @@ The names are what the game will write. Its file API only allows `.ini`, `.cfg`,
 
 Records the game writes: `hello` (first record of each boot, with the world's name and the currency's `name` and `symbol`), `config` (the currency again, when the settings are reloaded), `listing`, `sale`, `auctionStart`, `bid`, `auctionEnd`, `notice` (something for one linked player: `Sold`, `Outbid`, `Won`, `AuctionSold`, `NoBids`, `Expired`, `Mail`, `Removed`, `BidReturned`), `linked`, `unlinked`, `reply`. Every record has `seq`, counting up with no gaps across boots, and `t` in epoch milliseconds.
 
-Commands the game reads: `link_offer` (`code`, `discordId`, optional `expires`), `unlink` (`discordId`), `balance_query` (`discordId`, `replyTo`). A relay that restarts its `seq` from 1 says so by changing `epoch`.
+Commands the game reads: `link_offer` (`code`, `discordId`, optional `expires`), `unlink` (`discordId`), `balance_query` and `mailbox_query` (`discordId`, `replyTo`). A relay that restarts its `seq` from 1 says so by changing `epoch`.
+
+Both questions are answered with a `reply` record carrying the same `replyTo`, `ok` (false for a Discord account nobody has linked) and `user`. A balance adds `balance`. A mailbox adds `total` (items waiting), `lines`, `items` (the first 25 lines, each `item` and `qty`), `claimed` (the player has a mailbox) and `required` (the server needs one to collect).
 
 To have the inbox read at once rather than at the next poll, send `reloadlua zBay_BridgePoke.lua` over RCON after writing to it.
 
@@ -111,6 +115,8 @@ python ../estral-tools/zbay/check_runtime.py
 python ../estral-tools/zbay/check_translations.py
 python ../estral-tools/zbay/harness/run_tests.py
 ```
+
+In debug mode (`-debug`), an admin's right-click on the ground also has **zBay: Send Test Mail**. It queues 50 nails, an axe and 6 logs as mail for whoever pressed it, announced the way real mail is, so the mailbox can be tried with nobody else on to buy from. The logs are more than one trip can carry.
 
 ### Translation strings
 
