@@ -1,5 +1,5 @@
 version=1
-id=
+id=3817487234
 title=zBay
 description=[img]https://i.imgur.com/lja52Fs.gif[/img]
 description=
@@ -100,4 +100,4 @@ description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=38093764
 description=[b]LAPLACE//DAEMON[/b]
 description=Every blade you forge rolls a rarity, and a fortune
 tags=Build 42;Interface;Misc;Multiplayer;QoL;WIP
-visibility=unlisted
+visibility=public
