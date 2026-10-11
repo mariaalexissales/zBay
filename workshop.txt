@@ -1,11 +1,13 @@
 version=1
 id=
 title=zBay
+description=[img]https://i.imgur.com/lja52Fs.gif[/img]
+description=
 description=[h1]zBay[/h1]
 description=[h2]A marketplace for multiplayer servers[/h2]
 description=[b]List what you find, buy what you need, bid on what you want - from anywhere, with the currency your server chooses.[/b]
 description=
-description=Right-click the ground and choose [b]Open zBay[/b]. That is the whole way in: no terminal to find, no power needed.
+description=Right-click the ground and choose [b]Open zBay[/b], or hover the map icon on the left sidebar and click the zBay cell that flies out with it. No terminal to find, no power needed.
 description=
 description=[hr][/hr]
 description=[h2]What It Does[/h2]
@@ -14,7 +16,6 @@ description=[*] [b]Fixed-price listings[/b] - sell one or a stack, buyers take a
 description=[*] [b]Auctions[/b] - opening bid, optional buyout, and a bid in the last minutes extends the clock so nobody is sniped
 description=[*] [b]A bank[/b] - deposit your server's currency, pay and get paid from your balance, withdraw it again
 description=[*] [b]Mail[/b] - anything too heavy to carry waits for you instead of being lost
-description=[*] [b]Discord[/b] - sales and auctions in a channel, and a message when you are outbid
 description=[/list]
 description=
 description=[b]Bids are held, not promised.[/b] A bid leaves your bank when you place it and comes straight back if you are outbid, so nobody wins with money they have since spent.
@@ -47,6 +48,56 @@ description=[b]Built to stay quiet.[/b] The server never broadcasts the market. 
 description=
 description=A readable backup of every balance and listing is kept beside the settings and rewritten every few minutes, for the day a server is killed or rolled back.
 description=
+description=Want to try a setup before it goes on a server? It all works in singleplayer too.
+description=
+description=[hr][/hr]
+description=[h2]Coming Soon[/h2]
+description=A Discord bot: sales and auctions posted to a channel, and a message when you are outbid or something of yours sells.
+description=
+description=[hr][/hr]
 description=[b][u]Requires [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3508537032]NeatUI Framework[/url][/u][/b] by Rocco & Afyrmo - subscribe to that as well or the window won't open.
+description=
+description=[hr][/hr]
+description=[h2]Contributions[/h2]
+description=Ideas, bug reports, or a currency setup you want to share? Workshop comments or reach out directly. Credit goes here as it grows. I know it isn't perfect, so all forms of input are welcome!
+description=
+description=[hr][/hr]
+description=[h1]Join Our Community![/h1]
+description=Have questions, suggestions, or need support? Join the official Discord server to stay updated on future releases and connect with other players!
+description=👉[url=https://discord.gg/heXQBtYUZb]Click here to join the Discord server[/url]
+description=[url=https://ko-fi.com/estralexe][img]https://i.imgur.com/S6apsIQ.gif[/img][/url]
+description=[url=https://www.twitch.tv/estralexe][img]https://i.imgur.com/FabN9Nh.gif[/img][/url]
+description=
+description=[hr][/hr]
+description=[h2]More From Estral[/h2]
+description=Check out my other mods while you’re at it:
+description=
+description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3791631305][img]https://images.steamusercontent.com/ugc/10550109030485225665/A79EED3FC204D4945A5842ACFCD964749B4F39EE/[/img][/url]
+description=[b]Pinoy Pantry[/b]
+description=Sarap ng Pinas in Knox Country
+description=
+description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3794717412][img]https://images.steamusercontent.com/ugc/10017484433944652614/60E3AF0B951E328D2880E7363BF820701BB54E2F/[/img][/url]
+description=[b]Quest System Framework[/b]
+description=Add quests to your multiplayer servers
+description=
+description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3795596462][img]https://images.steamusercontent.com/ugc/17894628963991674168/9F2F1791EF6C7891106FABB38FE7D35F7BECF314/[/img][/url]
+description=[b]Player Leaderboard System[/b]
+description=Have your players fight for first place, or keep track of your best lives in solo
+description=
+description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3799346338][img]https://images.steamusercontent.com/ugc/16978772379826731736/09B7859AB47474217FC3504E07DA9493103F542C/[/img][/url]
+description=[b]Remove Vanilla Anything[/b]
+description=For those who are tired of seeing vanilla items in their heavily modded servers
+description=
+description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3746632343][img]https://images.steamusercontent.com/ugc/15813353898320562803/21D8A18963A880E6C1ED8AD9122946EFC6AC5A7B/[/img][/url]
+description=[b]Bundle Up! - A Packing Mod[/b]
+description=To organize all of your excessive stuff
+description=
+description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3800241753][img]https://images.steamusercontent.com/ugc/16485154806146051588/96977B7CB045B7166D5FCBB970FC886F2A322EE5/[/img][/url]
+description=[b]Dead Court Deck[/b]
+description=For your [strike]scalper[/strike] collectable needs!
+description=
+description=[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809376465][img]https://images.steamusercontent.com/ugc/14562058275516331001/A6E0C864A8C7DFCDAA20888EA3F10CACEE49586B/[/img][/url]
+description=[b]LAPLACE//DAEMON[/b]
+description=Every blade you forge rolls a rarity, and a fortune
 tags=Build 42;Interface;Misc;Multiplayer;QoL;WIP
 visibility=unlisted
